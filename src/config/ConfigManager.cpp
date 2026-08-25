@@ -31,7 +31,7 @@
 ConfigManager::ConfigManager(const char* filename) : filename(filename), secure() {}
 
 /**
- * @brief Loads the configuration from a file stored in SPIFFS
+ * @brief Loads the configuration from a file stored in LittleFS
  *
  * @return true if the configuration was successfully loaded and parsed false otherwise
  */
