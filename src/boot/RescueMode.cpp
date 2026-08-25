@@ -66,6 +66,13 @@ static constexpr uint32_t OTA_MASK = 0xFFFFF000;
 
 static Webserver* rescueWebserver = nullptr;
 
+// Rescue OTA failure state. A failure at any stage has to survive until the response
+// handler runs, because Update.hasError() alone does not cover an aborted upload or a
+// rejected md5 -- and reporting success for a partial flash bricks a board that has no
+// USB-to-serial bridge. Reset at UPLOAD_FILE_START so a retry starts clean.
+static bool rescueOtaFailed = false;
+static String rescueOtaError;
+
 /**
  * @brief Read boot data from RTC memory
  * @param data Reference to RtcBootData struct to fill
@@ -356,48 +363,112 @@ static void handleRescueReboot() {
 
 /**
  * @brief Handle POST /api/v1/rescue/ota – firmware upload
- *        Expects multipart/form-data with file field "firmware"
+ *        Expects multipart/form-data with file field "firmware".
+ *
+ *        An optional "md5" URL query parameter (e.g. /api/v1/rescue/ota?md5=<hex>) makes
+ *        Update.end() verify the flashed image against that digest. It has to be a query
+ *        parameter rather than a form field: ESP8266WebServer only publishes multipart form
+ *        fields once the entire body has been parsed (_parseForm in Parsing-impl.h), which
+ *        is long after this callback first runs, whereas URL arguments are parsed up front.
+ *
+ * @return void
  */
 static void handleRescueOtaUpload() {
     HTTPUpload& upload = rescueWebserver->raw().upload();
 
     if (upload.status == UPLOAD_FILE_START) {
+        rescueOtaFailed = false;
+        rescueOtaError = "";
+
         uint32_t maxSize =
             (ESP.getFreeSketchSpace() - OTA_OFFSET) & OTA_MASK;  // NOLINT(readability-static-accessed-through-instance)
         Logger::info("Rescue OTA upload started", "RescueMode");
-        Update.begin(maxSize, U_FLASH);
+
+        if (!Update.begin(maxSize, U_FLASH)) {
+            rescueOtaFailed = true;
+            rescueOtaError = Update.getErrorString();
+            Logger::error((String("Rescue Update.begin failed: ") + rescueOtaError).c_str(), "RescueMode");
+            return;
+        }
+
+        if (rescueWebserver->raw().hasArg("md5") && !Update.setMD5(rescueWebserver->raw().arg("md5").c_str())) {
+            rescueOtaFailed = true;
+            rescueOtaError = "Invalid md5 parameter";
+            Logger::error("Rescue OTA rejected: invalid md5 parameter", "RescueMode");
+            Update.end();
+        }
     } else if (upload.status == UPLOAD_FILE_WRITE) {
-        Update.write(upload.buf, upload.currentSize);
+        if (rescueOtaFailed) {
+            return;
+        }
+
+        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+            rescueOtaFailed = true;
+            rescueOtaError = Update.getErrorString();
+            Logger::error((String("Rescue OTA write failed: ") + rescueOtaError).c_str(), "RescueMode");
+            Update.end();
+        }
     } else if (upload.status == UPLOAD_FILE_END) {
-        Update.end(true);
-        Logger::info("Rescue OTA upload finished", "RescueMode");
+        if (rescueOtaFailed) {
+            return;
+        }
+
+        // end(true) is deliberate: a multipart upload never announces its length up front, so
+        // begin() reserved maxSize and the image is legitimately shorter than that reservation.
+        if (Update.end(true)) {
+            Logger::info("Rescue OTA upload finished", "RescueMode");
+        } else {
+            rescueOtaFailed = true;
+            rescueOtaError = Update.getErrorString();
+            Logger::error((String("Rescue Update.end failed: ") + rescueOtaError).c_str(), "RescueMode");
+        }
+    } else if (upload.status == UPLOAD_FILE_ABORTED) {
+        Update.end();
+        rescueOtaFailed = true;
+        rescueOtaError = "Upload aborted";
+        Logger::error("Rescue OTA upload aborted", "RescueMode");
     }
 }
 
 /**
- * @brief Handle POST /api/v1/rescue/ota – send JSON response and reboot if successful
+ * @brief Handle POST /api/v1/rescue/ota – send JSON response and reboot only on a clean flash
+ *
+ *        Returns 500 with the concrete Updater error when anything went wrong, and does not
+ *        reboot: this is the last-resort recovery path on a board with no serial bridge, so a
+ *        half-written image must never be reported as success.
+ *
+ * @return void
  */
 static void handleRescueOtaFinished() {
     JsonDocument doc;
 
-    doc["status"] = "ok";
-    doc["message"] = "OTA update successful, rebooting...";
+    const bool failed = rescueOtaFailed || Update.hasError();
 
-    if (Update.hasError()) {
+    if (failed) {
+        String message = rescueOtaError;
+        if (message.length() == 0) {
+            message = Update.getErrorString();
+        }
+
         doc["status"] = "error";
-        doc["message"] = "OTA update failed";
+        doc["message"] = message;
+    } else {
+        doc["status"] = "ok";
+        doc["message"] = "OTA update successful, rebooting...";
     }
 
     String json;
     serializeJson(doc, json);
 
     rescueCors();
-    rescueWebserver->raw().send(HTTP_CODE_OK, "application/json", json);
+    rescueWebserver->raw().send(failed ? HTTP_CODE_INTERNAL_ERROR : HTTP_CODE_OK, "application/json", json);
 
-    if (!Update.hasError()) {
-        delay(REBOOT_DELAY_MS);
-        ESP.restart();  // NOLINT(readability-static-accessed-through-instance)
+    if (failed) {
+        return;
     }
+
+    delay(REBOOT_DELAY_MS);
+    ESP.restart();  // NOLINT(readability-static-accessed-through-instance)
 }
 
 /**

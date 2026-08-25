@@ -66,37 +66,8 @@ void Logger::log(LogLevel level, const char* message, const char* className) {
     Serial.println(entry);
 }
 
-/**
- * @brief Logs a debug message
- *
- * @param message The debug message to log
- * @param className optional class name for context
- */
-void Logger::debug(const char* message, const char* className) { log(LOG_DEBUG, message, className); }
-
-/**
- * @brief Logs an info message
- *
- * @param message The info message to log
- * @param className optional class name for context
- */
-void Logger::info(const char* message, const char* className) { log(LOG_INFO, message, className); }
-
-/**
- * @brief Logs a warning message
- *
- * @param message The warning message to log
- * @param className optional class name for context
- */
-void Logger::warn(const char* message, const char* className) { log(LOG_WARN, message, className); }
-
-/**
- * @brief Logs an error message
- *
- * @param message The error message to log
- * @param className optional class name for context
- */
-void Logger::error(const char* message, const char* className) { log(LOG_ERROR, message, className); }
+// debug()/info()/warn()/error() are defined inline in Logger.h so that calls below
+// LOG_COMPILE_LEVEL vanish at the call site, taking their string literals with them.
 
 /**
  * @brief Print the current local time in [HH:MM:SS]

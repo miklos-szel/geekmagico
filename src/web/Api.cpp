@@ -573,7 +573,10 @@ void handleNtpSync(Webserver* webserver) {
     bool syncOk = ntpClient->syncNow();
     doc["status"] = syncOk ? "ok" : "error";
     doc["lastStatus"] = ntpClient->lastStatus();
-    doc["lastSyncTime"] = ntpClient->lastSyncTime();
+    // Narrowed to 32 bits on purpose: time_t is 64-bit on this core, and 64-bit JSON
+    // integers cost several KB of flash we do not have (ARDUINOJSON_USE_LONG_LONG=0).
+    // Epoch seconds fit in uint32 until 2106.
+    doc["lastSyncTime"] = static_cast<uint32_t>(ntpClient->lastSyncTime());
 
     String json;
     serializeJson(doc, json);
@@ -606,7 +609,10 @@ void handleNtpStatus(Webserver* webserver) {
 
     doc["lastOk"] = ntpClient->lastSyncOk();
     doc["lastStatus"] = ntpClient->lastStatus();
-    doc["lastSyncTime"] = ntpClient->lastSyncTime();
+    // Narrowed to 32 bits on purpose: time_t is 64-bit on this core, and 64-bit JSON
+    // integers cost several KB of flash we do not have (ARDUINOJSON_USE_LONG_LONG=0).
+    // Epoch seconds fit in uint32 until 2106.
+    doc["lastSyncTime"] = static_cast<uint32_t>(ntpClient->lastSyncTime());
 
     String json;
     serializeJson(doc, json);

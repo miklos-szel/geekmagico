@@ -59,6 +59,12 @@ The device reboots into GeekMagicO. At this point the screen may look wrong or t
 orientation may be off — that is expected, because only half the job is done: the firmware
 is flashed but the filesystem (web UI and configuration) is not.
 
+> **If the stock page answers `ERROR[4]: Not Enough Space`,** the build you are holding is too
+> large for this route. The stock updater has to fit the incoming image alongside its own
+> 505KB sketch below the 1MB mark, which caps `firmware.bin` at roughly **528KB**. Releases are
+> kept under 512KB for this reason. A build that exceeds it can only be installed by flashing
+> over serial with `esptool`, which does mean opening the case.
+
 ### Step 2 — flash the filesystem
 
 With no filesystem present, GeekMagicO brings up a WiFi access point and exposes a
@@ -72,6 +78,9 @@ Join it, then upload **`littlefs.bin`** at:
 ```
 http://192.168.4.1/legacyupdate
 ```
+
+That page offers **two** upload forms. Use the **FileSystem** one — `littlefs.bin` sent through
+the firmware form would be written into the sketch slot and leave the device unbootable.
 
 The device reboots and the full web UI comes up. Done.
 
@@ -168,7 +177,9 @@ access point and recovery API that works even when the main firmware is broken.
 
 - `GET /api/v1/rescue/status` — system and debug info
 - `POST /api/v1/rescue/reboot` — reboot
-- `POST /api/v1/rescue/ota` — upload new firmware (multipart)
+- `POST /api/v1/rescue/ota` — upload new firmware (multipart, file field `firmware`).
+  Returns `500` with the Updater error in `message` if the flash failed, and only reboots
+  on a clean write. Append `?md5=<hex>` to have the image verified against that digest.
 - `POST /api/v1/rescue/factory-reset` — clear settings, including a forgotten web password
 
 Rescue Mode uses the same AP credentials as setup mode and requires no authentication —

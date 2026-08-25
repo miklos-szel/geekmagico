@@ -121,6 +121,41 @@ auto childObjectConst(JsonObjectConst parent, const char* key) -> JsonObjectCons
     return member(parent, key).as<JsonObjectConst>();
 }
 
+/**
+ * @brief Parse a run of decimal digits, advancing the cursor past what it consumed
+ *
+ * Replaces a sscanf("%d:%d") call. sscanf drags newlib's float-capable scanf family
+ * (~2.4KB of flash) into the image for the sake of two integers; see
+ * scripts/strip_scanf_float.py and the OTA size ceiling section in CLAUDE.md.
+ *
+ * @param cursor Position to read from; advanced past the digits consumed on success
+ * @param out Receives the parsed value
+ *
+ * @return True when at least one digit was consumed and the value did not overflow
+ */
+auto parseDecimalRun(const char** cursor, int* out) -> bool {
+    static constexpr int DECIMAL_BASE = 10;
+    static constexpr int PARSE_VALUE_MAX = 9999;
+
+    const char* pos = *cursor;
+    if (*pos < '0' || *pos > '9') {
+        return false;
+    }
+
+    int value = 0;
+    while (*pos >= '0' && *pos <= '9') {
+        value = (value * DECIMAL_BASE) + (*pos - '0');
+        if (value > PARSE_VALUE_MAX) {
+            return false;
+        }
+        ++pos;
+    }
+
+    *cursor = pos;
+    *out = value;
+    return true;
+}
+
 }  // namespace
 
 /**
@@ -186,13 +221,22 @@ auto hhmmToMinutes(const char* hhmm, uint16_t fallback) -> uint16_t {
         return fallback;
     }
 
+    const char* cursor = hhmm;
+    while (*cursor == ' ' || *cursor == '\t') {
+        ++cursor;
+    }
+
     int hours = 0;
     int minutes = 0;
-    if (sscanf(hhmm, "%d:%d", &hours, &minutes) != 2) {
+    if (!parseDecimalRun(&cursor, &hours) || *cursor != ':') {
+        return fallback;
+    }
+    ++cursor;
+    if (!parseDecimalRun(&cursor, &minutes)) {
         return fallback;
     }
 
-    if (hours < 0 || hours > HOUR_MAX || minutes < 0 || minutes > MINUTE_MAX) {
+    if (hours > HOUR_MAX || minutes > MINUTE_MAX) {
         return fallback;
     }
 

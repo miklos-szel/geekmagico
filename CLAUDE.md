@@ -11,14 +11,55 @@ can be tuned for one panel rather than compromised across two. Default `LCD_ROTA
 (`include/config/ConfigManager.h`); the cube's `4` is gone. Don't reintroduce a second target
 without a reason — it doubles every layout decision.
 
+## The OTA size ceiling
+
+`firmware.bin` **must stay under ~528KB**, and the working target is **≤512KB (524,288
+bytes)**. This is not a preference; past it, users cannot install the firmware at all.
+
+Users arrive from the stock firmware by uploading `firmware.bin` through the stock `/update`
+page. The ESP8266 core's `Update.begin()` (`Updater.cpp`, `UPDATE_ERROR_SPACE`) refuses the
+upload *before writing a byte* when:
+
+```
+round4k(runningSketchSize) + round4k(newFirmwareSize) > FS_start_offset
+```
+
+On the stock image the running sketch is 505,200 bytes (rounds to 507,904) and the filesystem
+starts at the 1MB mark, which leaves **540,672 bytes** for the incoming binary. Exceeding it
+produces `ERROR[4]: Not Enough Space` on the stock update page and there is no way forward
+except soldering to the serial pads.
+
+The ceiling binds **only on that migration upload**. Once GeekMagicO is running its own 4m2m
+layout (FS at `0x400000`), `Update.begin()` has ~1.5MB of headroom, so `/api/v1/ota/fw`,
+`/legacyupdate` and the rescue OTA are unconstrained. That asymmetry is why the limit is easy
+to blow through without noticing: every OTA *you* do during development will succeed.
+
+Check the `Flash:` line on every build. Several size measures in `platformio.ini` exist purely
+to hold this line and should not be removed casually:
+
+- `-DNO_GLOBAL_SPIFFS` — the core instantiates a global `FS SPIFFS` object whose constructor
+  has side effects, so `--gc-sections` cannot drop it. This project is LittleFS-only; the flag
+  reclaims ~29KB. It only compiles because `lib/TJpg_Decoder` aliases `SPIFFS` to `LittleFS`.
+- `lib_ignore = SD, SDFS, ESP8266SdFat` — ~18KB of SdFat for a board with no SD slot, pulled
+  in by TJpg_Decoder's `#include <SD.h>`. See `lib/TJpg_Decoder/readme.md` for why that library
+  is vendored rather than pulled from `lib_deps`.
+- `-DARDUINOJSON_USE_DOUBLE=0` / `-DARDUINOJSON_USE_LONG_LONG=0` — ~6KB. Note `time_t` is
+  64-bit on this core, so epoch values going into JSON need an explicit `uint32_t` cast.
+- `-DLOG_COMPILE_LEVEL=2` — compiles `Logger::debug`/`info` calls away at the call site so
+  their string literals leave flash too (~4KB). Raising verbosity costs flash, not just noise.
+- `scripts/strip_scanf_float.py` — removes the framework's forced `-u _scanf_float`. Keep the
+  tree free of `scanf`/`sscanf` calls or this silently stops helping.
+
 ## The budget that actually binds
 
-**RAM, not flash.** Flash is ~1MB with room to spare (`eagle.flash.4m2m.ld`, 2MB LittleFS).
-Static RAM sits around 52% of 81,920 bytes, leaving roughly **39KB of heap** for WiFi
-buffers, the web server, JSON documents and decoders.
+**RAM is the other hard limit.** Static RAM sits around 61% of 81,920 bytes, leaving roughly
+**31KB of heap** for WiFi buffers, the web server, JSON documents and decoders.
 
 Check every build's `RAM:` line and treat a regression as a bug. At runtime, `src/main.cpp`
 logs free heap every 10 seconds — that number is the tripwire. **Target ≥18KB free at idle.**
+
+Note that plain string literals land in `.rodata`, which on this part is DRAM, not
+memory-mapped flash — so adding log and error messages costs RAM, not just flash.
 
 Consequences:
 
@@ -105,10 +146,12 @@ the same header block; existing ones keep what they have.
 
 ## CI
 
-`.github/workflows/ci.yml` gates on shellcheck, `pio check --fail-on-defect high`
-(clang-tidy: `bugprone-*`, `modernize-*`, `readability-*`, warnings as errors) and a full
-build. Run `pio check --fail-on-defect high` before pushing — the clang-tidy profile is
-strict and catches things like implicit conversions and missing trailing return types.
+There is no CI in this repo at the moment — the `.github/` directory was removed in `73c5e95`,
+so nothing gates a push automatically. Run the checks yourself before pushing:
+`pio run` (watch the `Flash:` and `RAM:` lines) and `pio check --fail-on-defect high`
+(clang-tidy: `bugprone-*`, `modernize-*`, `readability-*`, warnings as errors). The clang-tidy
+profile is strict and catches things like implicit conversions and missing trailing return
+types.
 
 Style follows the existing code: trailing return types (`auto f() -> T`), Doxygen blocks on
 functions, `static constexpr` over magic numbers, `NOLINT` with a reason when unavoidable.
