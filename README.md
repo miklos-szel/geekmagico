@@ -177,7 +177,9 @@ access point and recovery API that works even when the main firmware is broken.
 
 - `GET /api/v1/rescue/status` — system and debug info
 - `POST /api/v1/rescue/reboot` — reboot
-- `POST /api/v1/rescue/ota` — upload new firmware (multipart)
+- `POST /api/v1/rescue/ota` — upload new firmware (multipart, file field `firmware`).
+  Returns `500` with the Updater error in `message` if the flash failed, and only reboots
+  on a clean write. Append `?md5=<hex>` to have the image verified against that digest.
 - `POST /api/v1/rescue/factory-reset` — clear settings, including a forgotten web password
 
 Rescue Mode uses the same AP credentials as setup mode and requires no authentication —
