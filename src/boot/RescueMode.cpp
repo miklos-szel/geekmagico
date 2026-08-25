@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
- * GeekMagic Open Firmware
+ * GeekMagicO - a fork of GeekMagic Open Firmware
+ * <https://github.com/Times-Z/GeekMagic-Open-Firmware>
+ *
  * Copyright (C) 2026 Times-Z
+ * Copyright (C) 2026 GeekMagicO contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +25,7 @@
 #include <ArduinoJson.h>
 #include <Logger.h>
 #include <Updater.h>
+#include <LittleFS.h>
 
 #include "boot/RescueMode.h"
 #include "project_version.h"
@@ -330,78 +334,6 @@ static void handleRescueStatus() {
 }
 
 /**
- * @brief Handle POST /api/v1/rescue/token – reset API token
- *        Expects JSON body: { "token": "newtoken" }
- */
-static void handleRescueTokenReset() {
-    if (!rescueWebserver->raw().hasArg("plain") || rescueWebserver->raw().arg("plain").length() == 0) {
-        JsonDocument doc;
-
-        doc["status"] = "error";
-        doc["message"] = "Missing JSON body";
-
-        String json;
-        serializeJson(doc, json);
-
-        rescueCors();
-        rescueWebserver->raw().send(HTTP_CODE_BAD_REQUEST, "application/json", json);
-
-        return;
-    }
-
-    String body = rescueWebserver->raw().arg("plain");
-    JsonDocument ddoc;
-    DeserializationError err = deserializeJson(ddoc, body);
-
-    if (err) {
-        JsonDocument doc;
-
-        doc["status"] = "error";
-        doc["message"] = "Invalid JSON";
-
-        String json;
-        serializeJson(doc, json);
-
-        rescueCors();
-        rescueWebserver->raw().send(HTTP_CODE_BAD_REQUEST, "application/json", json);
-
-        return;
-    }
-
-    const char* newToken = ddoc["token"] | "";
-
-    if (strlen(newToken) == 0) {
-        JsonDocument doc;
-
-        doc["status"] = "error";
-        doc["message"] = "token field is required";
-
-        String json;
-        serializeJson(doc, json);
-
-        rescueCors();
-        rescueWebserver->raw().send(HTTP_CODE_BAD_REQUEST, "application/json", json);
-
-        return;
-    }
-
-    configManager.setApiToken(newToken);
-    configManager.save();
-
-    JsonDocument doc;
-    doc["status"] = "ok";
-    doc["message"] = "Token reset successfully";
-
-    String json;
-    serializeJson(doc, json);
-
-    rescueCors();
-    rescueWebserver->raw().send(HTTP_CODE_OK, "application/json", json);
-
-    Logger::info("API token reset via rescue mode", "RescueMode");
-}
-
-/**
  * @brief Handle POST /api/v1/rescue/reboot – reboot device immediately
  */
 static void handleRescueReboot() {
@@ -497,20 +429,51 @@ static void handleRescueReset() {
 }
 
 /**
+ * @brief Handle POST /api/v1/rescue/factory-reset - clear settings
+ *
+ * Wipes the configuration and stored secrets, leaving uploaded files alone.
+ * This is the escape hatch for a forgotten web password or a web lifetime
+ * window that locked the device down.
+ */
+static void handleRescueFactoryReset() {
+    JsonDocument doc;
+
+    bool removedConfig = true;
+    if (LittleFS.begin() && LittleFS.exists("/config.json")) {
+        removedConfig = LittleFS.remove("/config.json");
+    }
+
+    configManager.secure.remove("wifi_ssid");
+    configManager.secure.remove("wifi_password");
+    configManager.secure.remove("web_password");
+
+    doc["status"] = removedConfig ? "ok" : "error";
+    doc["message"] = removedConfig ? "Settings cleared, uploaded files kept" : "Failed to remove config";
+
+    String json;
+    serializeJson(doc, json);
+
+    rescueCors();
+    rescueWebserver->raw().send(removedConfig ? HTTP_CODE_OK : HTTP_CODE_INTERNAL_ERROR, "application/json", json);
+
+    Logger::warn("Factory reset performed via rescue API", "RescueMode");
+}
+
+/**
  * @brief Register rescue API endpoints (no auth)
  */
 auto RescueMode::registerRescueApi() -> void {
     // GET /api/v1/rescue/status — debug info (no auth)
     rescueWebserver->raw().on("/api/v1/rescue/status", HTTP_GET, handleRescueStatus);
 
-    // POST /api/v1/rescue/token — reset API token (no auth)
-    rescueWebserver->raw().on("/api/v1/rescue/token", HTTP_POST, handleRescueTokenReset);
-
     // POST /api/v1/rescue/reboot — reboot device (no auth)
     rescueWebserver->raw().on("/api/v1/rescue/reboot", HTTP_POST, handleRescueReboot);
 
     // POST /api/v1/rescue/reset — reset rescue counters (no auth)
     rescueWebserver->raw().on("/api/v1/rescue/reset", HTTP_POST, handleRescueReset);
+
+    // POST /api/v1/rescue/factory-reset — clear settings and secrets (no auth)
+    rescueWebserver->raw().on("/api/v1/rescue/factory-reset", HTTP_POST, handleRescueFactoryReset);
 
     // POST /api/v1/rescue/ota — firmware upload (no auth)
     rescueWebserver->raw().on("/api/v1/rescue/ota", HTTP_POST, handleRescueOtaFinished, handleRescueOtaUpload);

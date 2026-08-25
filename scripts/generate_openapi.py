@@ -134,7 +134,7 @@ def _preprocess_multiline_annotations(text):
 def build_openapi(annotations):
     api = {
         'openapi': '3.0.0',
-        'info': {'title': ROOT.name + ' API', 'version': '1.0.0'},
+        'info': {'title': 'GeekMagicO API', 'version': '1.0.0'},
         'servers': [
             {
                 'url': 'http://{host}/',
@@ -145,11 +145,10 @@ def build_openapi(annotations):
         'paths': {},
         'components': {
             'securitySchemes': {
-                'bearerAuth': {
+                'basicAuth': {
                     'type': 'http',
-                    'scheme': 'bearer',
-                    'bearerFormat': 'Token',
-                    'description': 'Bearer token authentication. Include the token in the Authorization header as: Bearer <token>'
+                    'scheme': 'basic',
+                    'description': 'Optional HTTP Basic authentication. Disabled by default; when enabled in Settings the device challenges with a 401 and the browser supplies credentials.'
                 }
             }
         }
@@ -192,10 +191,10 @@ def build_openapi(annotations):
 
         # Add security requirement and description for authenticated endpoints
         if requiresAuth:
-            op['security'] = [{'bearerAuth': []}]
-            op['description'] = '**Requires Authentication** - This endpoint requires a valid bearer token in the Authorization header.'
+            op['security'] = [{'basicAuth': []}]
+            op['description'] = '**Auth-gated** - requires HTTP Basic credentials when auth is enabled on the device (off by default).'
             if summary:
-                op['description'] = f"**Requires Authentication** - {summary}. This endpoint requires a valid bearer token in the Authorization header."
+                op['description'] = f"{summary}. Requires HTTP Basic credentials when auth is enabled on the device (off by default)."
         
         # parse responses like 200:application/json,404:application/json
         for resp in [r.strip() for r in responses.split(',') if r.strip()]:

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
- * GeekMagic Open Firmware
+ * GeekMagicO - a fork of GeekMagic Open Firmware
+ * <https://github.com/Times-Z/GeekMagic-Open-Firmware>
+ *
  * Copyright (C) 2026 Times-Z
+ * Copyright (C) 2026 GeekMagicO contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +26,7 @@
 #include <Logger.h>
 #include "config/ConfigManager.h"
 #include "config/SecureStorage.h"
+#include "config/Settings.h"
 
 ConfigManager::ConfigManager(const char* filename) : filename(filename), secure() {}
 
@@ -64,14 +68,32 @@ auto ConfigManager::load() -> bool {
 
     String ssid = doc["wifi_ssid"] | "";
     String password = doc["wifi_password"] | "";
-    String api_token = doc["api_token"] | "";
     String ntp_server_cfg = doc["ntp_server"] | "";
 
     this->lcd_rotation = doc["lcd_rotation"] | lcd_rotation;
 
+    JsonObjectConst web = doc["web"];
+    if (web["auth_enabled"].is<bool>()) {                          // NOLINT(readability-misplaced-array-index)
+        this->web_auth_enabled = web["auth_enabled"].as<bool>();   // NOLINT(readability-misplaced-array-index)
+    }
+    if (web["user"].is<const char*>()) {                           // NOLINT(readability-misplaced-array-index)
+        this->web_user = web["user"].as<const char*>();            // NOLINT(readability-misplaced-array-index)
+    }
+    if (web["lifetime_s"].is<uint16_t>()) {                        // NOLINT(readability-misplaced-array-index)
+        this->web_lifetime_s = web["lifetime_s"].as<uint16_t>();   // NOLINT(readability-misplaced-array-index)
+    }
+
+    settingsFromJson(doc.as<JsonObjectConst>(), this->settings);
+
+    // The bearer API token was removed in GeekMagicO. Purge any value left
+    // behind by an older build so upgraded devices stop carrying the secret.
+    if (secure.get("api_token", "").length() != 0) {
+        secure.remove("api_token");
+        Logger::info("Removed obsolete api_token from SecureStorage", "ConfigManager");
+    }
+
     String nvs_ssid = secure.get("wifi_ssid", "");
     String nvs_password = secure.get("wifi_password", "");
-    String nvs_api_token = secure.get("api_token", "");
 
     if ((ssid.length() != 0 && nvs_ssid.length() == 0) || (password.length() != 0 && nvs_password.length() == 0)) {
         secure.put("wifi_ssid", ssid.c_str());
@@ -93,18 +115,6 @@ auto ConfigManager::load() -> bool {
         this->password = secure.get("wifi_password").c_str();
     }
 
-    if (api_token.length() != 0 && nvs_api_token.length() == 0) {
-        secure.put("api_token", api_token.c_str());
-        this->api_token = secure.get("api_token").c_str();
-
-        // Ensure we delete the api token from the json config after migrating
-        ConfigManager::save();
-
-        Logger::info("API token migrated to SecureStorage", "ConfigManager");
-    } else {
-        this->api_token = secure.get("api_token").c_str();
-    }
-
     return true;
 }
 
@@ -123,11 +133,89 @@ auto ConfigManager::getSSID() const -> const char* { return ssid.c_str(); }
 auto ConfigManager::getPassword() const -> const char* { return password.c_str(); }
 
 /**
- * @brief Retrieves the current API token
+ * @brief Whether HTTP Basic auth is required for the web UI and API
  *
- * @return The API token as a c style string
+ * @return true when auth is enabled
  */
-auto ConfigManager::getApiToken() const -> const char* { return api_token.c_str(); }
+auto ConfigManager::isWebAuthEnabled() const -> bool { return web_auth_enabled; }
+
+/**
+ * @brief Enable or disable HTTP Basic auth
+ *
+ * @param enabled Whether auth should be required
+ *
+ * @return void
+ */
+auto ConfigManager::setWebAuthEnabled(bool enabled) -> void { web_auth_enabled = enabled; }
+
+/**
+ * @brief Retrieves the web auth username
+ *
+ * @return The username as a c style string
+ */
+auto ConfigManager::getWebUser() const -> const char* { return web_user.c_str(); }
+
+/**
+ * @brief Set the web auth username in memory
+ *
+ * @param newUser The username
+ *
+ * @return void
+ */
+// NOLINTBEGIN(readability-convert-member-functions-to-static)
+auto ConfigManager::setWebUser(const char* newUser) -> void {
+    if (newUser != nullptr && newUser[0] != '\0') {
+        web_user = newUser;
+    }
+}
+
+/**
+ * @brief Retrieves the web auth password from SecureStorage
+ *
+ * The password is never held in config.json nor cached in RAM.
+ *
+ * @return The password, empty when unset
+ */
+auto ConfigManager::getWebPassword() const -> String {
+    return const_cast<SecureStorage&>(secure).get("web_password", "");
+}
+
+/**
+ * @brief Persist the web auth password to SecureStorage
+ *
+ * @param newPassword The password
+ *
+ * @return void
+ */
+auto ConfigManager::setWebPassword(const char* newPassword) -> void {
+    if (newPassword == nullptr) {
+        return;
+    }
+
+    if (newPassword[0] == '\0') {
+        secure.remove("web_password");
+        return;
+    }
+
+    secure.put("web_password", newPassword);
+}
+// NOLINTEND(readability-convert-member-functions-to-static)
+
+/**
+ * @brief Seconds the web server stays reachable after boot (0 = always)
+ *
+ * @return The configured lifetime in seconds
+ */
+auto ConfigManager::getWebLifetimeSeconds() const -> uint16_t { return web_lifetime_s; }
+
+/**
+ * @brief Set the web server lifetime window in memory
+ *
+ * @param seconds Lifetime in seconds, 0 to keep the server up forever
+ *
+ * @return void
+ */
+auto ConfigManager::setWebLifetimeSeconds(uint16_t seconds) -> void { web_lifetime_s = seconds; }
 
 /**
  * @brief Retrieves the LCD rotation setting
@@ -160,18 +248,6 @@ auto ConfigManager::setWiFi(const char* newSsid, const char* newPassword) -> voi
         password = newPassword;
     }
 }
-/**
- * @brief Set WiFi credentials in memory
- * @param newSsid The SSID
- * @param newPassword The password
- *
- * @return void
- */
-auto ConfigManager::setApiToken(const char* newApiToken) -> void {
-    if (newApiToken != nullptr) {
-        api_token = newApiToken;
-    }
-}
 
 /**
  * @brief Save the current configuration to the file
@@ -200,10 +276,20 @@ auto ConfigManager::save() -> bool {
     secure.put("wifi_ssid", this->getSSID());
     secure.put("wifi_password", this->getPassword());
 
-    doc["lcd_rotation"] = lcd_rotation;
+    // Claim the root first: to<JsonObject>() clears the document, so anything
+    // written before this call would be discarded.
+    JsonObject root = doc.to<JsonObject>();
+    settingsToJson(this->settings, root);
+
+    root["lcd_rotation"] = lcd_rotation;  // NOLINT(readability-misplaced-array-index)
     if (!this->ntp_server.empty()) {
-        doc["ntp_server"] = this->ntp_server.c_str();
+        root["ntp_server"] = this->ntp_server.c_str();  // NOLINT(readability-misplaced-array-index)
     }
+
+    JsonObject web = root["web"].to<JsonObject>();  // NOLINT(readability-misplaced-array-index)
+    web["auth_enabled"] = web_auth_enabled;   // NOLINT(readability-misplaced-array-index)
+    web["user"] = web_user.c_str();           // NOLINT(readability-misplaced-array-index)
+    web["lifetime_s"] = web_lifetime_s;       // NOLINT(readability-misplaced-array-index)
 
     if (serializeJson(doc, file) == 0) {
         Logger::error("Failed to write config file", "ConfigManager");

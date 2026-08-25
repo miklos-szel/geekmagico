@@ -44,3 +44,9 @@ include/project_version.h
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 config.json
+
+# macOS
+.DS_Store
+
+# Local scratch/test data
+tmptmp/

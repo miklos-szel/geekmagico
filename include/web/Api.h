@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
- * GeekMagic Open Firmware
+ * GeekMagicO - a fork of GeekMagic Open Firmware
+ * <https://github.com/Times-Z/GeekMagic-Open-Firmware>
+ *
  * Copyright (C) 2026 Times-Z
+ * Copyright (C) 2026 GeekMagicO contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,9 +23,21 @@
 #ifndef API_H
 #define API_H
 
+#include <ArduinoJson.h>
 #include "web/Webserver.h"
 
 void setCorsHeaders(Webserver* webserver);
+
+// Shared helpers used by the per-area API files.
+auto checkAuth(Webserver* webserver) -> bool;
+auto requireAuth(Webserver* webserver) -> bool;
+void sendJson(Webserver* webserver, int code,
+              const JsonDocument& doc);  // NOLINT(readability-avoid-const-params-in-decls)
+void sendStatus(Webserver* webserver, int code, const char* status, const char* message = nullptr);
+auto readJsonBody(Webserver* webserver, JsonDocument& doc) -> bool;
+
+void registerConfigApi(Webserver* webserver);
+void registerFilesApi(Webserver* webserver);
 void registerApiEndpoints(Webserver* webserver);
 void handleOtaUpload(Webserver* webserver, int mode);
 void handleOtaFinished(Webserver* webserver);
@@ -46,8 +61,6 @@ void handleNtpConfigSet(Webserver* webserver);
 void handleDisplayRotationGet(Webserver* webserver);
 void handleDisplayRotationSet(Webserver* webserver);
 
-void handleTokenCheck(Webserver* webserver);
-void handleTokenSave(Webserver* webserver);
 
 void handleLogsGet(Webserver* webserver);
 void handleLogsDownload(Webserver* webserver);

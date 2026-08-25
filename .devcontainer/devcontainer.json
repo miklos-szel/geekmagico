@@ -1,5 +1,5 @@
 {
-	"name": "Geekmagic OpenFirmware",
+	"name": "GeekMagicO",
 	"build": {
 		"dockerfile": "Dockerfile"
 	},
@@ -18,8 +18,8 @@
 		}
 	},
 	"runArgs": [
-		"--name=geekmagic-openfirmware-dev",
-		"--hostname=geekmagic-openfirmware-dev",
+		"--name=geekmagico-dev",
+		"--hostname=geekmagico-dev",
 		"-v",
 		"${env:HOME}/.ssh:/home/debian/.ssh:ro",
 		"-v",

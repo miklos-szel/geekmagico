@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
- * GeekMagic Open Firmware
+ * GeekMagicO - a fork of GeekMagic Open Firmware
+ * <https://github.com/Times-Z/GeekMagic-Open-Firmware>
+ *
  * Copyright (C) 2026 Times-Z
+ * Copyright (C) 2026 GeekMagicO contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,6 +36,10 @@
 #include "ntp/NTPClient.h"
 #include "boot/RescueMode.h"
 #include "dashboard/DashboardManager.h"
+#include "weather/WeatherClient.h"
+#include "screens/ScreenManager.h"
+#include "time/TimeService.h"
+#include "display/Backlight.h"
 #include <array>
 
 #ifndef METRICS_URL
@@ -40,10 +47,13 @@
 #endif
 
 ConfigManager configManager;
-const char* AP_SSID = "GeekMagic";
+const char* AP_SSID = "GeekMagicO";
 const char* AP_PASSWORD = "$str0ngPa$$w0rd";
 WiFiManager* wifiManager = nullptr;
 ESP8266HTTPUpdateServer httpUpdater;
+// Do not change: this salt feeds SecureStorage key derivation (SecureStorage.cpp).
+// Changing it makes every existing device unable to decrypt its stored WiFi
+// credentials after an OTA, so it keeps its pre-fork value on purpose.
 static constexpr const char* KV_SALT_STR = "GeekMagicOpenFirmwareIsAwesome";
 static size_t initial_free_heap = 0;
 static constexpr size_t FREE_BUF_SIZE = 32;
@@ -102,7 +112,7 @@ void setup() {
     Serial.begin(SERIAL_BAUD_RATE);
     delay(BOOT_DELAY_MS);
     Serial.println("");
-    Logger::info(("GeekMagic Open Firmware " + String(PROJECT_VER_STR)).c_str());
+    Logger::info(("GeekMagicO " + String(PROJECT_VER_STR)).c_str());
 
     constexpr int TOTAL_STEPS = 5;
     int step = 0;
@@ -153,6 +163,13 @@ void setup() {
     ntpClient = new NTPClient();
     ntpClient->begin();
 
+    WeatherClient::begin();
+
+    const DisplaySettings& displayCfg = configManager.settings.display;
+    Backlight::configureNightMode(displayCfg.night_mode, displayCfg.night_start, displayCfg.night_end,
+                                  displayCfg.night_brightness);
+    Backlight::setDayBrightness(displayCfg.brightness);
+
     DisplayManager::drawLoadingBar((float)step / TOTAL_STEPS, LOADING_BAR_Y);
 
     step++;
@@ -165,6 +182,8 @@ void setup() {
     DisplayManager::drawLoadingBar((float)step / TOTAL_STEPS, LOADING_BAR_Y);
 
     registerApiEndpoints(webserver);
+    registerConfigApi(webserver);
+    registerFilesApi(webserver);
 
     if (!littleFsReadyForStatic) {
         httpUpdater.setup(&webserver->raw(), "/legacyupdate");
@@ -183,6 +202,22 @@ void setup() {
 
     if (METRICS_ENDPOINT[0] != '\0' && WiFiManager::isConnected() && !wifiManager->isApMode()) {
         DashboardManager::begin(METRICS_ENDPOINT);
+    } else {
+        // Hand the panel to the theme engine; the metrics dashboard, when
+        // compiled in, owns the screen instead.
+        ScreenManager::begin();
+    }
+
+    // Optional hardening: shut the web server down a while after boot so a
+    // device left running as a photo frame stops exposing a network surface.
+    // Deliberately not armed in AP mode, where closing the server would lock
+    // the user out before they could ever configure WiFi.
+    if (wifiManager->isApMode()) {
+        if (configManager.getWebLifetimeSeconds() > 0) {
+            Logger::info("Web lifetime window not armed while in setup (AP) mode", "Global");
+        }
+    } else {
+        webserver->armLifetimeWindow(configManager.getWebLifetimeSeconds());
     }
 
     // enable watchdog before going to loop()
@@ -209,6 +244,13 @@ void loop() {
     if (ntpClient != nullptr) {
         ntpClient->loop();
     }
+
+    WeatherClient::loop();
+
+    // Cheap: only touches the backlight pin on a day/night transition.
+    Backlight::applySchedule(TimeService::now().minutesOfDay);
+
+    ScreenManager::loop();
 
     DisplayManager::update();
 

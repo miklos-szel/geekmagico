@@ -8,6 +8,7 @@ This file should be ran from this local directory
 
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse
+import base64
 import json
 import os
 import threading
@@ -111,18 +112,30 @@ class APIHandler(SimpleHTTPRequestHandler):
 router = Router()
 
 def check_auth(h: APIHandler) -> bool:
-    auth = h.headers.get("Authorization", "")
-    expected = h.state.get("auth.token", "")
-    
-    if not auth.startswith("Bearer "):
-        h.json_response({"status": "error", "message": "Invalid or missing token"}, 401)
+    """Optional HTTP Basic auth, mirroring the device.
+
+    Disabled by default, so every request passes. Set state key
+    "web.auth_enabled" to require Basic credentials; a failure challenges the
+    client the same way the firmware does.
+    """
+    if not h.state.get("web.auth_enabled", False):
+        return True
+
+    user = h.state.get("web.user", "admin")
+    password = h.state.get("web.password", "")
+    if not password:
+        return True
+
+    expected = "Basic " + base64.b64encode(f"{user}:{password}".encode()).decode()
+
+    if h.headers.get("Authorization", "") != expected:
+        h.send_response(401)
+        h.send_header("WWW-Authenticate", 'Basic realm="GeekMagicO"')
+        h.send_header("Content-Type", "application/json")
+        h.end_headers()
+        h.wfile.write(b'{"status":"error","message":"Authentication required"}')
         return False
-    
-    token = auth.replace("Bearer ", "", 1).strip()
-    if not expected or token != expected:
-        h.json_response({"status": "error", "message": "Invalid or missing token"}, 401)
-        return False
-    
+
     return True
 
 @router.route("GET", "/api/v1/wifi/status")
@@ -142,7 +155,15 @@ def wifi_scan(h: APIHandler):
     if not check_auth(h):
         return
     time.sleep(h.state.get("d.getActionDelay", 0))
-    h.json_response(h.state.get("wifi.networks"))
+    # Mirrors the firmware: the scan is async, so the first call reports
+    # "scanning" and a later one returns the results.
+    polls = h.state.get("wifi.scan_polls", 0)
+    if polls < 1:
+        h.state.set("wifi.scan_polls", polls + 1)
+        return h.json_response({"status": "scanning", "networks": []})
+    h.state.set("wifi.scan_polls", 0)
+    nets = h.state.get("wifi.networks") or []
+    h.json_response({"status": "done", "count": len(nets), "networks": nets})
 
 
 @router.route("POST", "/api/v1/wifi/connect")
@@ -306,38 +327,270 @@ def reboot(h: APIHandler):
     h.json_response({"status": "rebooting"})
 
 
-@router.route("GET", "/api/v1/token/check")
-def token_check(h: APIHandler):
-    auth = h.headers.get("Authorization", "")
-    expected = h.state.get("auth.token", "")
-    if not auth.startswith("Bearer "):
-        return h.json_response({"error": "missing bearer token"}, 401)
-    token = auth.replace("Bearer ", "", 1).strip()
-    if not expected or token != expected:
-        return h.json_response({"error": "invalid token"}, 401)
-    h.json_response({"status": "ok"})
+# ---------------------------------------------------------------- GeekMagicO
+# Routes backing the five-tab UI. State lives in DeviceState so saves persist
+# for the lifetime of the mock, which is what makes the UI testable.
 
-
-@router.route("POST", "/api/v1/token/save")
-def token_save(h: APIHandler):
-    auth = h.headers.get("Authorization", "")
-    expected = h.state.get("auth.token", "")
-    if not auth.startswith("Bearer "):
-        return h.json_response({"error": "missing bearer token"}, 401)
-    token = auth.replace("Bearer ", "", 1).strip()
-    if not expected or token != expected:
-        return h.json_response({"error": "invalid token"}, 401)
-
+def _merge(h: APIHandler, key: str, defaults: dict):
+    """Merge a posted JSON body into a state dict and return it."""
     data = h.read_json()
     if data is None:
-        return h.json_response({"error": "invalid json"}, 400)
+        return None
+    cur = dict(state_defaults(h, key, defaults))
+    for k, v in data.items():
+        cur[k] = v
+    h.state.set(key, cur)
+    return cur
 
-    new_token = data.get("token", "")
-    if not new_token:
-        return h.json_response({"error": "token field is required"}, 400)
 
-    h.state.set("auth.token", new_token)
-    h.json_response({"status": "ok"})
+def state_defaults(h: APIHandler, key: str, defaults: dict) -> dict:
+    cur = h.state.get(key)
+    if cur is None:
+        h.state.set(key, dict(defaults))
+        return dict(defaults)
+    return cur
+
+
+WEATHER_DEFAULTS = {
+    "city": "vienna", "interval_min": 20, "wind": "kmh", "temp": "c",
+    "pressure": "hpa", "gif": "", "api_key": "", "forecast_key": "",
+}
+TIME_DEFAULTS = {
+    "tz_mode": "auto", "utc_offset_min": 120, "hour_color": "#FFFFFF",
+    "minute_color": "#FFA500", "second_color": "#FFFFFF", "format12h": False,
+    "date_format": "DD/MM/YYYY", "colon_blink": False, "font": 0,
+    "ntp_server": "",
+}
+PICTURE_DEFAULTS = {"auto_display": True, "shuffle": False, "interval_s": 5, "current": ""}
+DISPLAY_DEFAULTS = {
+    "theme": 0, "auto_switch": False, "auto_switch_interval_s": 10,
+    "auto_switch_mask": 0, "brightness": 60, "night_mode": False,
+    "night_start": "22:00", "night_end": "07:00", "night_brightness": 20,
+    "rotation": 0,
+}
+WEB_DEFAULTS = {
+    "auth_enabled": False, "user": "admin", "lifetime_s": 0,
+}
+THEMES = [
+    "Weather Clock Today", "Weather Forecast", "Photo Album",
+    "Time Style 1", "Time Style 2", "Time Style 3", "Simple Weather Clock",
+]
+
+
+@router.route("GET", "/api/v1/weather/config")
+def weather_config_get(h: APIHandler):
+    if not check_auth(h):
+        return
+    cfg = state_defaults(h, "weather", WEATHER_DEFAULTS)
+    out = {k: v for k, v in cfg.items() if k not in ("api_key", "forecast_key")}
+    out["api_key_set"] = bool(cfg.get("api_key"))
+    out["forecast_key_set"] = bool(cfg.get("forecast_key"))
+    h.json_response(out)
+
+
+@router.route("POST", "/api/v1/weather/config")
+def weather_config_set(h: APIHandler):
+    if not check_auth(h):
+        return
+    if _merge(h, "weather", WEATHER_DEFAULTS) is None:
+        return h.json_response({"status": "error", "message": "Invalid JSON"}, 400)
+    h.json_response({"status": "ok", "message": "Weather settings saved"})
+
+
+@router.route("GET", "/api/v1/weather/current")
+def weather_current(h: APIHandler):
+    if not check_auth(h):
+        return
+    cfg = state_defaults(h, "weather", WEATHER_DEFAULTS)
+    h.json_response({
+        "valid": True, "status": "ok",
+        "provider": "openweathermap" if cfg.get("api_key") else "keyless",
+        "temp": 19.0, "feels_like": 17.0, "wind": 2.8, "pressure": 1013,
+        "humidity": 43, "condition": "Cloudy", "description": "overcast",
+        "temp_unit": "C", "wind_unit": "km/h", "pressure_unit": "hPa",
+    })
+
+
+@router.route("POST", "/api/v1/weather/refresh")
+def weather_refresh(h: APIHandler):
+    if not check_auth(h):
+        return
+    h.json_response({"status": "ok", "message": "ok"})
+
+
+@router.route("GET", "/api/v1/time/config")
+def time_config_get(h: APIHandler):
+    if not check_auth(h):
+        return
+    cfg = dict(state_defaults(h, "time", TIME_DEFAULTS))
+    weather = state_defaults(h, "weather", WEATHER_DEFAULTS)
+    cfg["auto_offset_available"] = bool(weather.get("api_key"))
+    cfg["effective_offset_min"] = cfg.get("utc_offset_min", 0)
+    h.json_response(cfg)
+
+
+@router.route("POST", "/api/v1/time/config")
+def time_config_set(h: APIHandler):
+    if not check_auth(h):
+        return
+    if _merge(h, "time", TIME_DEFAULTS) is None:
+        return h.json_response({"status": "error", "message": "Invalid JSON"}, 400)
+    h.json_response({"status": "ok", "message": "Time settings saved"})
+
+
+@router.route("GET", "/api/v1/pictures/config")
+def pictures_config_get(h: APIHandler):
+    if not check_auth(h):
+        return
+    h.json_response(state_defaults(h, "pictures", PICTURE_DEFAULTS))
+
+
+@router.route("POST", "/api/v1/pictures/config")
+def pictures_config_set(h: APIHandler):
+    if not check_auth(h):
+        return
+    if _merge(h, "pictures", PICTURE_DEFAULTS) is None:
+        return h.json_response({"status": "error", "message": "Invalid JSON"}, 400)
+    h.json_response({"status": "ok", "message": "Picture settings saved"})
+
+
+@router.route("GET", "/api/v1/display/config")
+def display_config_get(h: APIHandler):
+    if not check_auth(h):
+        return
+    cfg = dict(state_defaults(h, "display", DISPLAY_DEFAULTS))
+    cfg["themes"] = THEMES
+    cfg["theme_name"] = THEMES[cfg.get("theme", 0)]
+    cfg["night_active"] = False
+    h.json_response(cfg)
+
+
+@router.route("POST", "/api/v1/display/config")
+def display_config_set(h: APIHandler):
+    if not check_auth(h):
+        return
+    cur = _merge(h, "display", DISPLAY_DEFAULTS)
+    if cur is None:
+        return h.json_response({"status": "error", "message": "Invalid JSON"}, 400)
+    if cur.get("theme", 0) >= len(THEMES):
+        return h.json_response({"status": "error", "message": "theme out of range"}, 400)
+    h.json_response({"status": "ok", "message": "Display settings saved"})
+
+
+@router.route("GET", "/api/v1/web/config")
+def web_config_get(h: APIHandler):
+    if not check_auth(h):
+        return
+    cfg = dict(state_defaults(h, "web", WEB_DEFAULTS))
+    cfg["password_set"] = bool(h.state.get("web.password", ""))
+    cfg["lifetime_remaining_s"] = 0
+    cfg["ap_mode"] = False
+    h.json_response(cfg)
+
+
+@router.route("POST", "/api/v1/web/config")
+def web_config_set(h: APIHandler):
+    if not check_auth(h):
+        return
+    data = h.read_json()
+    if data is None:
+        return h.json_response({"status": "error", "message": "Invalid JSON"}, 400)
+
+    if "password" in data:
+        h.state.set("web.password", data.pop("password"))
+
+    # Mirrors the firmware: refuse to arm auth with no password set.
+    if data.get("auth_enabled") and not h.state.get("web.password", ""):
+        return h.json_response(
+            {"status": "error", "message": "Set a password before enabling auth"}, 400)
+
+    cur = dict(state_defaults(h, "web", WEB_DEFAULTS))
+    cur.update(data)
+    h.state.set("web", cur)
+    h.state.set("web.auth_enabled", cur.get("auth_enabled", False))
+    h.state.set("web.user", cur.get("user", "admin"))
+    h.json_response({"status": "ok", "message": "Web settings saved"})
+
+
+@router.route("GET", "/api/v1/system/info")
+def system_info(h: APIHandler):
+    if not check_auth(h):
+        return
+    display = state_defaults(h, "display", DISPLAY_DEFAULTS)
+    h.json_response({
+        "model": "SmallTV-Ultra", "firmware": "GeekMagicO", "version": "dev",
+        "free_heap": 27000, "chip_id": 123456, "uptime_s": 42,
+        "fs_total": 2000000, "fs_used": 500000, "fs_free": 1500000,
+        "theme": display.get("theme", 0),
+        "theme_name": THEMES[display.get("theme", 0)],
+        "ip": "192.168.4.1", "ap_mode": False, "ssid": "TestSSID",
+    })
+
+
+@router.route("POST", "/api/v1/system/factory-reset")
+def system_factory_reset(h: APIHandler):
+    if not check_auth(h):
+        return
+    h.json_response({"status": "ok", "message": "Settings cleared, rebooting"})
+
+
+def _files_key(h: APIHandler) -> str:
+    d = "gif" if "dir=gif" in (h.path or "") else "image"
+    return f"files.{d}"
+
+
+@router.route("GET", "/api/v1/files")
+def files_list(h: APIHandler):
+    if not check_auth(h):
+        return
+    key = _files_key(h)
+    files = h.state.get(key)
+    if files is None:
+        files = [{"name": "sample.jpg", "size": 21000}] if key.endswith("image") \
+            else [{"name": "spaceman.gif", "size": 61000}]
+        h.state.set(key, files)
+    used = sum(f["size"] for f in files)
+    h.json_response({
+        "dir": "/" + key.split(".")[1], "files": files,
+        "totalBytes": 2000000, "usedBytes": used,
+        "freeBytes": 2000000 - used,
+    })
+
+
+@router.route("POST", "/api/v1/files")
+def files_upload(h: APIHandler):
+    if not check_auth(h):
+        return
+    # Record an entry so the UI's post-upload refresh shows something real.
+    key = _files_key(h)
+    files = list(h.state.get(key) or [])
+    length = int(h.headers.get("Content-Length", 0) or 0)
+    name = f"upload-{len(files) + 1}.jpg"
+    h.rfile.read(length) if length else None
+    files.append({"name": name, "size": max(1, length)})
+    h.state.set(key, files)
+    h.json_response({"status": "ok", "file": name, "freeBytes": 1000000})
+
+
+@router.route("DELETE", "/api/v1/files")
+def files_delete(h: APIHandler):
+    if not check_auth(h):
+        return
+    data = h.read_json() or {}
+    key = _files_key(h)
+    files = [f for f in (h.state.get(key) or []) if f["name"] != data.get("name")]
+    h.state.set(key, files)
+    h.json_response({"status": "ok", "message": "File removed"})
+
+
+@router.route("POST", "/api/v1/files/set")
+def files_set(h: APIHandler):
+    if not check_auth(h):
+        return
+    data = h.read_json() or {}
+    h.state.set("files.selected", data.get("name", ""))
+    h.json_response({"status": "ok", "message": "Selection saved"})
+
 
 def make_handler(state: DeviceState, router: Router):
     class BoundHandler(APIHandler):
@@ -399,8 +652,6 @@ if __name__ == "__main__":
             {"name": "[BIG SHOT].gif", "size": 500},
         ],
     })
-
-    state.set("auth.token", "test-token")
 
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--host', '-h', default=HOST, help='Host to bind (default: %(default)s)')

@@ -1,6 +1,13 @@
-<header>
-  <h1 id="header-title">Placeholder title</h1>
-  <div x-data="themeSwitcher()">
+<nav class="gm-nav">
+  <ul>
+    <li><a href="./network.html" data-page="network">Network</a></li>
+    <li><a href="./weather.html" data-page="weather">Weather</a></li>
+    <li><a href="./time.html" data-page="time">Time</a></li>
+    <li><a href="./image.html" data-page="image">Pictures</a></li>
+    <li><a href="./settings.html" data-page="settings">Settings</a></li>
+  </ul>
+</nav>
+<div x-data="themeSwitcher()">
     <button
       @click="toggleTheme"
       aria-label="Switch theme"
@@ -63,5 +70,5 @@
       </span>
     </button>
   </div>
-  <div id="theme-waterdrop-overlay"></div>
-</header>
+<div id="theme-waterdrop-overlay"></div>
+

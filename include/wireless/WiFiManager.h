@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
- * GeekMagic Open Firmware
+ * GeekMagicO - a fork of GeekMagic Open Firmware
+ * <https://github.com/Times-Z/GeekMagic-Open-Firmware>
+ *
  * Copyright (C) 2026 Times-Z
+ * Copyright (C) 2026 GeekMagicO contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +35,12 @@ class WiFiManager {
     bool startAccessPointMode();
     bool isApMode() const;
     IPAddress getIP() const;
-    static void scanNetworks(JsonArray& out);
+    // Asynchronous scan. A blocking scan makes the radio hop channels for
+    // seconds, which drops any client connected to the device's own access
+    // point mid-request - so the browser never sees the response.
+    static void startScan();
+    static auto scanInProgress() -> bool;
+    static auto collectScanResults(JsonArray& out) -> int8_t;
     bool connectToNetwork(const char* ssid, const char* pass, uint32_t timeoutMs = 10000);
     static bool isConnected();
     static String getConnectedSSID();

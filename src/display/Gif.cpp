@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
- * GeekMagic Open Firmware
+ * GeekMagicO - a fork of GeekMagic Open Firmware
+ * <https://github.com/Times-Z/GeekMagic-Open-Firmware>
+ *
  * Copyright (C) 2026 Times-Z
+ * Copyright (C) 2026 GeekMagicO contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -211,16 +214,25 @@ auto Gif::gifDraw(GIFDRAW* pDraw) -> void  // NOLINT(readability-function-cognit
 
     if (pDraw->y == 0 && s_instance != nullptr) {
         if (!s_instance->m_centered) {
-            const auto screenW = static_cast<int>(gfx->width());
-            const auto screenH = static_cast<int>(gfx->height());
-            const auto gifW = static_cast<int>(pDraw->iWidth);
-            const auto gifH = static_cast<int>(pDraw->iHeight);
+            if (s_instance->m_forcedPlacement) {
+                // Explicit placement: anchor the frame's own origin to it.
+                s_instance->m_offsetX =
+                    static_cast<int16_t>(s_instance->m_forcedX - static_cast<int>(pDraw->iX));
+                s_instance->m_offsetY =
+                    static_cast<int16_t>(s_instance->m_forcedY - static_cast<int>(pDraw->iY));
+            } else {
+                const auto screenW = static_cast<int>(gfx->width());
+                const auto screenH = static_cast<int>(gfx->height());
+                const auto gifW = static_cast<int>(pDraw->iWidth);
+                const auto gifH = static_cast<int>(pDraw->iHeight);
 
-            const auto centerX = static_cast<int>((screenW - gifW) / 2);
-            const auto centerY = static_cast<int>((screenH - gifH) / 2);
+                const auto centerX = static_cast<int>((screenW - gifW) / 2);
+                const auto centerY = static_cast<int>((screenH - gifH) / 2);
 
-            s_instance->m_offsetX = static_cast<int16_t>(centerX - static_cast<int>(pDraw->iX));
-            s_instance->m_offsetY = static_cast<int16_t>(centerY - static_cast<int>(pDraw->iY));
+                s_instance->m_offsetX = static_cast<int16_t>(centerX - static_cast<int>(pDraw->iX));
+                s_instance->m_offsetY = static_cast<int16_t>(centerY - static_cast<int>(pDraw->iY));
+            }
+
             s_instance->m_centered = true;
         }
 
@@ -657,3 +669,28 @@ auto Gif::isPlaying() const -> bool { return m_playing; }
  * @param enabled true to enable looping false to disable
  */
 auto Gif::setLoopEnabled(bool enabled) -> void { m_loopEnabled = enabled; }
+
+/**
+ * @brief Place subsequent playback at an explicit top-left corner
+ *
+ * @param xPos Left edge on the panel
+ * @param yPos Top edge on the panel
+ *
+ * @return void
+ */
+auto Gif::setPlacement(int16_t xPos, int16_t yPos) -> void {
+    m_forcedPlacement = true;
+    m_forcedX = xPos;
+    m_forcedY = yPos;
+    m_centered = false;
+}
+
+/**
+ * @brief Return to centring subsequent playback
+ *
+ * @return void
+ */
+auto Gif::clearPlacement() -> void {
+    m_forcedPlacement = false;
+    m_centered = false;
+}

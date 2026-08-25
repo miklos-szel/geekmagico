@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
- * GeekMagic Open Firmware
+ * GeekMagicO - a fork of GeekMagic Open Firmware
+ * <https://github.com/Times-Z/GeekMagic-Open-Firmware>
+ *
  * Copyright (C) 2026 Times-Z
+ * Copyright (C) 2026 GeekMagicO contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -85,23 +88,74 @@ auto WiFiManager::startStationMode() -> bool {
     return false;
 }
 
-void WiFiManager::scanNetworks(JsonArray& out) {
-    Logger::info("Scanning WiFi networks...", "WiFiManager");
+/**
+ * @brief Begin an asynchronous WiFi scan
+ *
+ * Returns immediately. A blocking scan holds the radio for several seconds
+ * and, while the device is serving its own access point, that drops the
+ * browser's connection before the response can be sent.
+ *
+ * @return void
+ */
+void WiFiManager::startScan() {
+    if (WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
+        return;
+    }
 
-    int8_t networks = WiFi.scanNetworks();
+    // The STA radio has to be enabled to scan at all. In setup mode the
+    // device runs WIFI_AP only (see startAccessPointMode()), and a scan
+    // issued in that mode silently returns nothing on the ESP8266 core.
+    // Switching to WIFI_AP_STA keeps the access point up - it does not by
+    // itself connect the station or touch the current STA credentials.
+    if (WiFi.getMode() == WIFI_AP) {
+        WiFi.mode(WIFI_AP_STA);
+    }
 
-    Logger::info(String("Found networks: " + String(networks)).c_str(), "WiFiManager");
+    Logger::info("Starting async WiFi scan", "WiFiManager");
 
-    for (int i = 0; i < networks; ++i) {
+    // async = true, show_hidden = false
+    WiFi.scanNetworks(true, false);
+}
+
+/**
+ * @brief Whether a scan is still running
+ *
+ * @return true while results are not yet available
+ */
+auto WiFiManager::scanInProgress() -> bool { return WiFi.scanComplete() == WIFI_SCAN_RUNNING; }
+
+/**
+ * @brief Collect the results of a finished scan
+ *
+ * Results are freed once read, so the next request starts a fresh scan, which
+ * is what the Rescan button expects.
+ *
+ * @param out Array receiving one object per network
+ *
+ * @return Number of networks, or a negative WIFI_SCAN_* status
+ */
+auto WiFiManager::collectScanResults(JsonArray& out) -> int8_t {
+    const int8_t found = WiFi.scanComplete();
+
+    if (found < 0) {
+        return found;
+    }
+
+    for (int8_t i = 0; i < found; ++i) {
         JsonObject obj = out.add<JsonObject>();
 
-        auto rssiVal = static_cast<int>(WiFi.RSSI(i));
-
         obj["ssid"] = WiFi.SSID(i);                             // NOLINT(readability-misplaced-array-index)
-        obj["rssi"] = rssiVal;                                  // NOLINT(readability-misplaced-array-index)
+        obj["rssi"] = static_cast<int>(WiFi.RSSI(i));           // NOLINT(readability-misplaced-array-index)
         obj["enc"] = static_cast<int>(WiFi.encryptionType(i));  // NOLINT(readability-misplaced-array-index)
     }
+
+    WiFi.scanDelete();
+
+    Logger::info((String("WiFi scan finished, ") + String(found) + " networks").c_str(), "WiFiManager");
+
+    return found;
 }
+
 
 auto WiFiManager::connectToNetwork(const char* ssid, const char* pass, uint32_t timeoutMs) -> bool {
     Logger::info(String("Connecting to " + String(ssid)).c_str(), "WiFiManager");

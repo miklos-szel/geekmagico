@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
- * GeekMagic Open Firmware
+ * GeekMagicO - a fork of GeekMagic Open Firmware
+ * <https://github.com/Times-Z/GeekMagic-Open-Firmware>
+ *
  * Copyright (C) 2026 Times-Z
+ * Copyright (C) 2026 GeekMagicO contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +30,7 @@
 #include "display/DisplayManager.h"
 #include "config/ConfigManager.h"
 #include "display/Gif.h"
+#include "display/Backlight.h"
 
 static Gif* g_gif = nullptr;
 
@@ -209,15 +213,6 @@ static constexpr uint8_t ST7789_ADDR_END_LOW = 0xEF;
  */
 auto DisplayManager::getGfx() -> Arduino_GFX* { return &g_lcd; }
 
-/**
- * @brief Turn the LCD backlight on
- *
- * @return void
- */
-static inline void lcdBacklightOn() {
-    pinMode((uint8_t)LCD_BACKLIGHT_GPIO, OUTPUT);
-    digitalWrite((uint8_t)LCD_BACKLIGHT_GPIO, LCD_BACKLIGHT_ACTIVE_LOW ? LOW : HIGH);
-}
 
 /**
  * @brief Write a single command byte to the ST7789 via the data bus
@@ -372,7 +367,8 @@ static void lcdHardReset() {
 static void lcdEnsureInit() {
     Logger::info("Initialization started", "DisplayManager");
 
-    lcdBacklightOn();
+    // PWM rather than a plain digitalWrite, so brightness and night mode work.
+    Backlight::begin(configManager.settings.display.brightness);
 
     uint8_t rotation = configManager.getLCDRotationSafe();
 
@@ -581,7 +577,7 @@ auto DisplayManager::drawStartup(String currentIP) -> void {
     int constexpr titleY = 10;
     int constexpr fontSize = 2;
 
-    DisplayManager::drawTextWrapped(DISPLAY_PADDING, titleY, "GeekMagic Open Firmware", fontSize, LCD_WHITE, LCD_BLACK,
+    DisplayManager::drawTextWrapped(DISPLAY_PADDING, titleY, "GeekMagicO", fontSize, LCD_WHITE, LCD_BLACK,
                                     false);
     DisplayManager::drawTextWrapped(DISPLAY_PADDING, titleY + THREE_LINES_SPACE, String(PROJECT_VER_STR), fontSize,
                                     LCD_WHITE, LCD_BLACK, false);
@@ -699,6 +695,57 @@ auto DisplayManager::playGifFullScreen(const String& path, uint32_t timeMs) -> b
 }
 
 /**
+ * @brief Play a GIF looping inside a fixed box, leaving the rest of the panel alone
+ *
+ * Used for the small animation on the weather screen, which sits alongside
+ * text that must not be cleared.
+ *
+ * @param path Path to the GIF on LittleFS
+ * @param xPos Left edge of the box
+ * @param yPos Top edge of the box
+ * @param width Box width, cleared before playback starts
+ * @param height Box height, cleared before playback starts
+ *
+ * @return true when playback started
+ */
+auto DisplayManager::playGifAt(const String& path, int16_t xPos, int16_t yPos, int16_t width, int16_t height) -> bool {
+    if (g_gif == nullptr) {
+        g_gif = new Gif();
+        if (g_gif == nullptr) {
+            Logger::error("Failed to allocate GIF decoder", "DisplayManager");
+            return false;
+        }
+    }
+
+    g_gif->stop();
+
+    if (!g_gif->begin()) {
+        return false;
+    }
+
+    g_lcd.fillRect(xPos, yPos, width, height, LCD_BLACK);
+
+    g_gif->setPlacement(xPos, yPos);
+    g_gif->setLoopEnabled(true);
+
+    return g_gif->playOne(path);
+}
+
+/**
+ * @brief Stop GIF playback without clearing the panel
+ *
+ * @return true
+ */
+auto DisplayManager::stopGifQuiet() -> bool {
+    if (g_gif != nullptr) {
+        g_gif->stop();
+        g_gif->clearPlacement();
+    }
+
+    return true;
+}
+
+/**
  * @brief Stop GIF playback if playing
  *
  * @return true
@@ -706,6 +753,7 @@ auto DisplayManager::playGifFullScreen(const String& path, uint32_t timeMs) -> b
 auto DisplayManager::stopGif() -> bool {
     if (g_gif != nullptr) {
         g_gif->stop();
+        g_gif->clearPlacement();
     }
 
     DisplayManager::clearScreen();

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
- * GeekMagic Open Firmware
+ * GeekMagicO - a fork of GeekMagic Open Firmware
+ * <https://github.com/Times-Z/GeekMagic-Open-Firmware>
+ *
  * Copyright (C) 2026 Times-Z
+ * Copyright (C) 2026 GeekMagicO contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,6 +34,7 @@
 static constexpr size_t URI_BUF_SIZE = 192;
 static constexpr size_t PATH_BUF_SIZE = 256;
 static constexpr bool LOG_STATIC_HIT_INFO = false;
+static constexpr unsigned long MS_PER_SECOND = 1000UL;
 
 namespace {
 
@@ -108,9 +112,125 @@ void Webserver::begin() {
 /**
  * @brief Handles incoming client requests
  *
+ * Also drives the lifetime window, so a caller only has to keep calling this.
+ *
  * @return void
  */
-void Webserver::handleClient() { _server.handleClient(); }
+void Webserver::handleClient() {
+    if (_closed) {
+        return;
+    }
+
+    _server.handleClient();
+    checkLifetimeWindow();
+}
+
+/**
+ * @brief Start the countdown after which the web server shuts down
+ *
+ * Passing 0 leaves the server up forever. The caller is responsible for not
+ * arming this while the device is still in setup/AP mode, which would lock the
+ * user out before they could configure WiFi.
+ *
+ * @param lifetimeSeconds Seconds to stay reachable, 0 to stay up forever
+ *
+ * @return void
+ */
+void Webserver::armLifetimeWindow(uint16_t lifetimeSeconds) {
+    if (lifetimeSeconds == 0) {
+        disarmLifetimeWindow();
+        return;
+    }
+
+    _lifetimeSeconds = lifetimeSeconds;
+    _lifetimeExpiresAtMs = millis() + (static_cast<unsigned long>(lifetimeSeconds) * MS_PER_SECOND);
+    _lifetimeArmed = true;
+
+    Logger::info((String("Web server will shut down in ") + String(lifetimeSeconds) + "s").c_str(), "Webserver");
+}
+
+/**
+ * @brief Cancel the lifetime window, keeping the server up
+ *
+ * @return void
+ */
+void Webserver::disarmLifetimeWindow() {
+    _lifetimeArmed = false;
+    _lifetimeSeconds = 0;
+}
+
+/**
+ * @brief Mark an upload or OTA as in flight
+ *
+ * While busy, the lifetime window will not close the server; the check runs
+ * again on the next loop.
+ *
+ * @param busy Whether a transfer is in progress
+ *
+ * @return void
+ */
+void Webserver::setBusy(bool busy) { _busy = busy; }
+
+/**
+ * @brief Whether a transfer is currently in flight
+ *
+ * @return true when busy
+ */
+auto Webserver::isBusy() const -> bool { return _busy; }
+
+/**
+ * @brief Whether the lifetime window has already closed the server
+ *
+ * @return true when the server has stopped serving
+ */
+auto Webserver::isClosed() const -> bool { return _closed; }
+
+/**
+ * @brief Seconds left before the lifetime window closes
+ *
+ * @return Remaining seconds, or 0 when not armed or already elapsed
+ */
+auto Webserver::secondsRemaining() const -> uint16_t {
+    if (!_lifetimeArmed) {
+        return 0;
+    }
+
+    const auto remainingMs = static_cast<int32_t>(_lifetimeExpiresAtMs - millis());
+    if (remainingMs <= 0) {
+        return 0;
+    }
+
+    return static_cast<uint16_t>(static_cast<unsigned long>(remainingMs) / MS_PER_SECOND);
+}
+
+/**
+ * @brief Close the server once the lifetime window elapses
+ *
+ * Deferred while a transfer is in flight so an upload is never cut in half.
+ *
+ * @return void
+ */
+void Webserver::checkLifetimeWindow() {
+    if (!_lifetimeArmed || _closed) {
+        return;
+    }
+
+    // Unsigned wraparound safe: compare the signed difference.
+    if (static_cast<int32_t>(millis() - _lifetimeExpiresAtMs) < 0) {
+        return;
+    }
+
+    if (_busy) {
+        Logger::info("Web lifetime window elapsed during a transfer, deferring shutdown", "Webserver");
+        return;
+    }
+
+    _server.close();
+    _closed = true;
+    _lifetimeArmed = false;
+
+    Logger::info("Web server closed by lifetime window, power-cycle to reopen", "Webserver");
+}
 
 /**
  * @brief Register a handler for a route

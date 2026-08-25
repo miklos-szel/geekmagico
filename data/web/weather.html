@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Weather</title>
+    <link rel="stylesheet" href="./css/pico.min.css" />
+    <link rel="stylesheet" href="./css/style.css" />
+    <script src="./js/alpinejs.min.js" defer></script>
+    <script src="./js/utils.js"></script>
+    <script src="./js/themeSwitcher.js"></script>
+    <script src="./js/fileManager.js"></script>
+    <script src="./js/pageHandlers.js"></script>
+    <script src="./js/otaUploadHandler.js"></script>
+    <script src="./js/main.js"></script>
+  </head>
+  <body>
+    <div id="nav-placeholder" data-page="weather"></div>
+    <main class="container">
+      <section x-data="weatherPage()" x-init="init()">
+        <div class="gm-section">
+          <h2>1. Set City Location</h2>
+          <div class="gm-row">
+            <label for="wcity">Input your city location:</label>
+            <input id="wcity" type="text" x-model="cfg.city" />
+          </div>
+          <p class="gm-hint">
+            City name, or a numeric OpenWeatherMap city ID when several cities
+            share a name.
+          </p>
+          <button class="gm-save" @click="saveCity()">Save</button>
+          <p class="gm-status" x-text="cityStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>2. Unit format</h2>
+          <div class="gm-row">
+            <label for="wind">Wind Speed:</label>
+            <select id="wind" x-model="cfg.wind">
+              <option value="ms">m/s</option>
+              <option value="kmh">km/h</option>
+              <option value="mph">mph</option>
+            </select>
+            <label for="temp" style="min-width: auto">Temperature:</label>
+            <select id="temp" x-model="cfg.temp">
+              <option value="c">°C</option>
+              <option value="f">°F</option>
+            </select>
+            <label for="press" style="min-width: auto">Pressure:</label>
+            <select id="press" x-model="cfg.pressure">
+              <option value="hpa">hPa</option>
+              <option value="inhg">inHg</option>
+              <option value="mmhg">mmHg</option>
+            </select>
+          </div>
+          <button class="gm-save" @click="saveUnits()">Save</button>
+          <p class="gm-status" x-text="unitStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>3. Weather Update Interval</h2>
+          <p class="gm-hint">
+            Without an API key the device uses a keyless service and the
+            interval is floored at 30 minutes to stay a good citizen. With your
+            own key you can refresh far more often.
+          </p>
+          <div class="gm-row">
+            <label for="interval">Interval:</label>
+            <input
+              id="interval"
+              type="number"
+              min="1"
+              max="1440"
+              x-model="cfg.interval_min"
+            />
+            <span>minutes</span>
+          </div>
+          <button class="gm-save" @click="saveInterval()">Save</button>
+          <p class="gm-status" x-text="intervalStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>4. Weather API key [Recommended]</h2>
+          <p class="gm-hint">
+            Optional. The device works without a key. Setting your own
+            <a href="https://openweathermap.org/api" target="_blank" rel="noopener">OpenWeatherMap key</a>
+            gives faster, more reliable updates and enables automatic timezone
+            detection. A new key can take 1-2 hours to activate.
+          </p>
+          <div class="gm-row">
+            <label for="apikey">API key:</label>
+            <input
+              id="apikey"
+              type="password"
+              x-model="apiKey"
+              autocomplete="off"
+              :placeholder="apiKeySet ? '•••••••• (set)' : 'not set'"
+            />
+          </div>
+          <button class="gm-save" @click="saveKey()">Save</button>
+          <p class="gm-status" x-text="keyStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>5. Weather Forecast API key</h2>
+          <p class="gm-hint">
+            Optional, only if you want the forecast to use a different key from
+            the one above.
+          </p>
+          <div class="gm-row">
+            <label for="fkey">Forecast key:</label>
+            <input
+              id="fkey"
+              type="password"
+              x-model="forecastKey"
+              autocomplete="off"
+              :placeholder="forecastKeySet ? '•••••••• (set)' : 'not set'"
+            />
+          </div>
+          <button class="gm-save" @click="saveForecastKey()">Save</button>
+          <p class="gm-status" x-text="forecastKeyStatus"></p>
+        </div>
+
+        <div class="gm-section" x-show="current">
+          <h2>6. Current reading</h2>
+          <p class="gm-hint">
+            Provider: <strong x-text="current && current.provider"></strong> —
+            <span x-text="current && current.status"></span>
+          </p>
+          <template x-if="current && current.valid">
+            <p>
+              <strong x-text="Math.round(current.temp) + current.temp_unit"></strong>
+              <span x-text="' · ' + current.condition"></span>
+              <span x-text="' · ' + current.humidity + '% RH'"></span>
+              <span x-text="' · ' + current.wind.toFixed(1) + ' ' + current.wind_unit"></span>
+            </p>
+          </template>
+        </div>
+
+        <div class="gm-section" x-data="fileManager('gif')" x-init="init()">
+          <h2>7. Gif In The Weather Screen</h2>
+          <p class="gm-hint">
+            Resize GIFs to 80x80 pixels before uploading. Use SET to choose
+            which one appears on the weather screen.
+          </p>
+          <div class="gm-files">
+            <input
+              type="file"
+              multiple
+              accept=".gif,image/gif"
+              @change="onPick($event)"
+            />
+            <div class="gm-upload-actions">
+              <button @click="uploadAll()" x-bind:disabled="uploading">Upload</button>
+              <button class="secondary" @click="refresh()">Reload</button>
+              <button class="secondary" @click="clearQueue()">Clear</button>
+              <button class="contrast" @click="cancel()" x-show="uploading">Cancel</button>
+              <button
+                class="contrast"
+                @click="removeSelected()"
+                x-show="files.length > 0"
+                x-bind:disabled="deletingBulk"
+                x-text="selectedNames.length > 0
+                  ? `Delete selected (${selectedNames.length})`
+                  : 'Delete all'"
+              ></button>
+            </div>
+            <p class="gm-status" x-text="status"></p>
+            <div class="gm-progress" x-show="queue.length">
+              <template x-for="item in queue" :key="item.name">
+                <div><span x-text="item.name"></span><span x-text="item.state"></span></div>
+              </template>
+            </div>
+            <p class="gm-hint">
+              Free space: <span x-text="freeHR"></span> — path /gif
+            </p>
+            <div class="gm-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>
+                      <input
+                        type="checkbox"
+                        :checked="allChecked"
+                        @change="toggleAll($event.target.checked)"
+                        aria-label="Select all GIFs"
+                      />
+                    </th>
+                    <th>#</th><th>Name</th><th>Size</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="(f, i) in files" :key="f.name">
+                    <tr>
+                      <td>
+                        <input
+                          type="checkbox"
+                          x-model="checked[f.name]"
+                          :aria-label="'Select ' + f.name"
+                        />
+                      </td>
+                      <td x-text="i + 1"></td>
+                      <td x-text="f.name"></td>
+                      <td x-text="humanFileSize(f.size)"></td>
+                      <td>
+                        <div class="gm-file-actions">
+                          <button class="contrast" @click="remove(f.name)">Delete</button>
+                          <button @click="select(f.name)">Set</button>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
+                  <tr x-show="loaded && files.length === 0">
+                    <td colspan="5"><em>No GIFs uploaded yet.</em></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+      <footer id="footer-placeholder"></footer>
+    </main>
+  </body>
+</html>

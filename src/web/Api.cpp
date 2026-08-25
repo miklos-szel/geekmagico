@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
- * GeekMagic Open Firmware
+ * GeekMagicO - a fork of GeekMagic Open Firmware
+ * <https://github.com/Times-Z/GeekMagic-Open-Firmware>
+ *
  * Copyright (C) 2026 Times-Z
+ * Copyright (C) 2026 GeekMagicO contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -53,7 +56,8 @@ void handleDeleteGif(Webserver* webserver);
 
 static constexpr int WIFI_CONNECT_TIMEOUT_MS = 15000;
 static constexpr size_t NTP_CONFIG_DOC_SIZE = 512;
-static constexpr int BEARER_LEN = 7;
+static constexpr const char* AUTH_REALM = "GeekMagicO";
+static constexpr const char* AUTH_FAIL_MESSAGE = "Authentication required";
 
 /**
  * @brief Register API endpoints for the webserver
@@ -64,8 +68,8 @@ static constexpr int BEARER_LEN = 7;
 void registerApiEndpoints(Webserver* webserver) {
     Logger::info("Registering API endpoints", "API");
 
-    // @openapi {get} /wifi/scan version=v1 group=WiFi summary="Scan available WiFi networks" requiresAuth=true
-    // responses=200:application/json,401:application/json
+    // @openapi {get} /wifi/scan version=v1 group=WiFi summary="Scan WiFi networks (async, poll until done)"
+    // requiresAuth=true responses=200:application/json,401:application/json
     webserver->raw().on("/api/v1/wifi/scan", HTTP_GET, [webserver]() { handleWifiScan(webserver); });
 
     // @openapi {post} /wifi/connect version=v1 group=WiFi summary="Connect to a WiFi network" requiresAuth=true
@@ -152,15 +156,6 @@ void registerApiEndpoints(Webserver* webserver) {
     // responses=200:application/json,401:application/json
     webserver->raw().on("/api/v1/gif", HTTP_GET, [webserver]() { handleListGifs(webserver); });
 
-    // @openapi {get} /token/check version=v1 group=Authentication summary="Check bearer token validity"
-    // requiresAuth=true responses=200:application/json,401:application/json
-    webserver->raw().on("/api/v1/token/check", HTTP_GET, [webserver]() { handleTokenCheck(webserver); });
-
-    // @openapi {post} /token/save version=v1 group=Authentication summary="Save a new bearer token" requiresAuth=true
-    // requestBody=application/json requestBodySchema=token:string example={"token":"your_secure_token_value"}
-    // responses=200:application/json,401:application/json,400:application/json
-    webserver->raw().on("/api/v1/token/save", HTTP_POST, [webserver]() { handleTokenSave(webserver); });
-
     // @openapi {get} /logs version=v1 group=System summary="Get recent logs" requiresAuth=true
     // responses=200:application/json,401:application/json
     webserver->raw().on("/api/v1/logs", HTTP_GET, [webserver]() { handleLogsGet(webserver); });
@@ -195,52 +190,47 @@ void setCorsHeaders(Webserver* webserver) {
 }
 
 /**
- * @brief Validate bearer token from Authorization header
+ * @brief Check whether the request is allowed through
+ *
+ * Auth is opt-in. When it is disabled (the default, matching the stock
+ * firmware) every request is allowed. When enabled, HTTP Basic credentials
+ * are required; the password lives in SecureStorage, never in config.json.
+ *
  * @param webserver Pointer to the Webserver instance
  *
- * @return true if token is valid false otherwise
+ * @return true if the request may proceed
  */
-static auto validateBearerToken(Webserver* webserver) -> bool {
-    if (!webserver->raw().hasHeader("Authorization")) {
-        return false;
-    }
-
-    String authHeader = webserver->raw().header("Authorization");
-
-    if (!authHeader.startsWith("Bearer ")) {
-        return false;
-    }
-
-    String providedToken = authHeader.substring(BEARER_LEN);
-    String storedToken = configManager.getApiToken();
-
-    if (storedToken.length() == 0) {
-        return false;
-    }
-
-    return providedToken.equals(storedToken);
-}
-
-/**
- * @brief Enforce bearer token check and send 401 response if invalid
- * @param webserver Pointer to the Webserver instance
- *
- * @return true if token is valid false otherwise
- */
-static auto requireBearerToken(Webserver* webserver) -> bool {
-    if (validateBearerToken(webserver)) {
+auto checkAuth(Webserver* webserver) -> bool {
+    if (!configManager.isWebAuthEnabled()) {
         return true;
     }
 
-    JsonDocument doc;
-    doc["status"] = "error";
-    doc["message"] = "Invalid or missing token";
+    const char* user = configManager.getWebUser();
+    String pass = configManager.getWebPassword();
 
-    String json;
-    serializeJson(doc, json);
+    if (pass.length() == 0) {
+        // Auth flagged on but no password set: fail open rather than brick
+        // access to the device, and make the misconfiguration visible.
+        Logger::warn("Web auth enabled but no password set, allowing request", "API");
+        return true;
+    }
+
+    return webserver->raw().authenticate(user, pass.c_str());
+}
+
+/**
+ * @brief Enforce auth and challenge the client if it fails
+ * @param webserver Pointer to the Webserver instance
+ *
+ * @return true if the request may proceed
+ */
+auto requireAuth(Webserver* webserver) -> bool {
+    if (checkAuth(webserver)) {
+        return true;
+    }
 
     setCorsHeaders(webserver);
-    webserver->raw().send(HTTP_CODE_UNAUTHORIZED, "application/json", json);
+    webserver->raw().requestAuthentication(BASIC_AUTH, AUTH_REALM, AUTH_FAIL_MESSAGE);
 
     Logger::warn(("Unauthorized request from " + webserver->raw().client().remoteIP().toString()).c_str(), "API");
 
@@ -248,111 +238,10 @@ static auto requireBearerToken(Webserver* webserver) -> bool {
 }
 
 /**
- * @brief Check if bearer token is valid
- * @param webserver Pointer to the Webserver instance
- *
- * @return void
- */
-void handleTokenCheck(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
-        return;
-    }
-
-    JsonDocument doc;
-    doc["status"] = "ok";
-    doc["message"] = "Token is valid";
-
-    String json;
-    serializeJson(doc, json);
-
-    setCorsHeaders(webserver);
-    webserver->raw().send(HTTP_CODE_OK, "application/json", json);
-}
-
-/**
- * @brief Save a new bearer token
- * @param webserver Pointer to the Webserver instance
- *
- * @return void
- */
-void handleTokenSave(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
-        return;
-    }
-
-    if (!webserver->raw().hasArg("plain") || webserver->raw().arg("plain").length() == 0) {
-        JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "Missing JSON body";
-
-        String json;
-        serializeJson(doc, json);
-
-        setCorsHeaders(webserver);
-        webserver->raw().send(HTTP_CODE_BAD_REQUEST, "application/json", json);
-
-        return;
-    }
-
-    String body = webserver->raw().arg("plain");
-    JsonDocument ddoc;
-    DeserializationError err = deserializeJson(ddoc, body);
-
-    if (err) {
-        JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "Invalid JSON";
-
-        String json;
-        serializeJson(doc, json);
-
-        setCorsHeaders(webserver);
-        webserver->raw().send(HTTP_CODE_BAD_REQUEST, "application/json", json);
-
-        Logger::warn("Attempt to save API token with invalid JSON", "API");
-
-        return;
-    }
-
-    const char* newToken = ddoc["token"] | "";
-
-    if (strlen(newToken) == 0) {
-        JsonDocument doc;
-        doc["status"] = "error";
-        doc["message"] = "token field is required";
-
-        String json;
-        serializeJson(doc, json);
-
-        setCorsHeaders(webserver);
-
-        webserver->raw().send(HTTP_CODE_BAD_REQUEST, "application/json", json);
-
-        Logger::warn("Attempt to save empty API token", "API");
-        return;
-    }
-
-    configManager.setApiToken(newToken);
-    configManager.save();
-
-    JsonDocument doc;
-    doc["status"] = "ok";
-    doc["message"] = "Token saved successfully";
-
-    String json;
-    serializeJson(doc, json);
-
-    setCorsHeaders(webserver);
-    webserver->raw().send(HTTP_CODE_OK, "application/json", json);
-
-    Logger::info("API token updated", "API");
-}
-
-/**
  * @brief OTA status endpoint
  */
 void handleOtaStatus(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -374,7 +263,7 @@ void handleOtaStatus(Webserver* webserver) {
  * @brief OTA cancel endpoint
  */
 void handleOtaCancel(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -399,7 +288,7 @@ void handleOtaCancel(Webserver* webserver) {
  * @return void
  */
 void handleListGifs(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -586,7 +475,7 @@ void handleGifUpload(Webserver* webserver) {
     static File gifFile;
     static bool uploadError = false;
 
-    if (upload.status == UPLOAD_FILE_START && !validateBearerToken(webserver)) {
+    if (upload.status == UPLOAD_FILE_START && !checkAuth(webserver)) {
         uploadError = true;
         JsonDocument doc;
 
@@ -609,6 +498,8 @@ void handleGifUpload(Webserver* webserver) {
 
     switch (upload.status) {
         case UPLOAD_FILE_START:
+            // Hold off the web lifetime window until the transfer settles.
+            webserver->setBusy(true);
             handleGifUploadStart(currentFilename, gifFile, uploadError);
             break;
         case UPLOAD_FILE_WRITE:
@@ -626,6 +517,7 @@ void handleGifUpload(Webserver* webserver) {
     }
 
     if (upload.status == UPLOAD_FILE_END || upload.status == UPLOAD_FILE_ABORTED) {
+        webserver->setBusy(false);
         sendGifUploadResult(webserver, currentFilename, uploadError);
     }
 }
@@ -637,7 +529,7 @@ void handleGifUpload(Webserver* webserver) {
  * @return void
  */
 void handleReboot(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -659,7 +551,7 @@ void handleReboot(Webserver* webserver) {
  * @brief Manual NTP sync trigger endpoint
  */
 void handleNtpSync(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -694,7 +586,7 @@ void handleNtpSync(Webserver* webserver) {
  * @brief Return NTP status
  */
 void handleNtpStatus(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -727,7 +619,7 @@ void handleNtpStatus(Webserver* webserver) {
  * @brief Get NTP configuration
  */
 void handleNtpConfigGet(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -745,7 +637,7 @@ void handleNtpConfigGet(Webserver* webserver) {
  * @brief Set NTP configuration
  */
 void handleNtpConfigSet(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -833,7 +725,7 @@ void handleNtpConfigSet(Webserver* webserver) {
  * @brief Get display rotation configuration
  */
 void handleDisplayRotationGet(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -851,7 +743,7 @@ void handleDisplayRotationGet(Webserver* webserver) {
  * @brief Set display rotation configuration
  */
 void handleDisplayRotationSet(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -953,7 +845,7 @@ void handleDisplayRotationSet(Webserver* webserver) {
 void handleOtaUpload(Webserver* webserver, int mode) {
     HTTPUpload& upload = webserver->raw().upload();
 
-    if (upload.status == UPLOAD_FILE_START && !validateBearerToken(webserver)) {
+    if (upload.status == UPLOAD_FILE_START && !checkAuth(webserver)) {
         otaError = true;
         otaStatus = "Unauthorized";
 
@@ -973,6 +865,8 @@ void handleOtaUpload(Webserver* webserver, int mode) {
 
     switch (upload.status) {
         case UPLOAD_FILE_START:
+            // Hold off the web lifetime window for the duration of the flash.
+            webserver->setBusy(true);
             otaHandleStart(upload, mode);
             break;
         case UPLOAD_FILE_WRITE:
@@ -980,9 +874,11 @@ void handleOtaUpload(Webserver* webserver, int mode) {
             break;
         case UPLOAD_FILE_END:
             otaHandleEnd(upload, mode);
+            webserver->setBusy(false);
             break;
         case UPLOAD_FILE_ABORTED:
             otaHandleAborted(upload);
+            webserver->setBusy(false);
             break;
         default:
             break;
@@ -996,7 +892,7 @@ void handleOtaUpload(Webserver* webserver, int mode) {
  * @return void
  */
 void handleOtaFinished(Webserver* webserver) {
-    if (!validateBearerToken(webserver)) {
+    if (!checkAuth(webserver)) {
         JsonDocument doc;
         doc["status"] = "error";
         doc["message"] = "Invalid or missing token";
@@ -1043,7 +939,7 @@ void handleOtaFinished(Webserver* webserver) {
  * @return void
  */
 void handlePlayGif(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -1128,7 +1024,7 @@ void handlePlayGif(Webserver* webserver) {
  * @brief Stop currently playing GIF
  */
 void handleStopGif(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -1149,7 +1045,7 @@ void handleStopGif(Webserver* webserver) {
  * @brief Delete a GIF file from storage
  */
 void handleDeleteGif(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -1240,29 +1136,49 @@ void handleDeleteGif(Webserver* webserver) {
  * @brief Handle WiFi scan
  */
 void handleWifiScan(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
     JsonDocument doc;
     JsonArray networks = doc["networks"].to<JsonArray>();
 
-    if (wifiManager != nullptr) {
-        WiFiManager::scanNetworks(networks);
+    if (wifiManager == nullptr) {
+        doc["status"] = "error";
+        sendJson(webserver, HTTP_CODE_OK, doc);
+
+        return;
     }
 
-    String out;
-    serializeJson(doc["networks"], out);
+    // The scan runs asynchronously so this handler always returns straight
+    // away: a blocking scan would hold the radio long enough to drop a client
+    // connected to the device's own access point.
+    if (WiFiManager::scanInProgress()) {
+        doc["status"] = "scanning";
+        sendJson(webserver, HTTP_CODE_OK, doc);
 
-    setCorsHeaders(webserver);
-    webserver->raw().send(HTTP_CODE_OK, "application/json", out);
+        return;
+    }
+
+    const int8_t found = WiFiManager::collectScanResults(networks);
+
+    if (found < 0) {
+        WiFiManager::startScan();
+        doc["status"] = "scanning";
+    } else {
+        doc["status"] = "done";
+        doc["count"] = found;
+    }
+
+    sendJson(webserver, HTTP_CODE_OK, doc);
 }
+
 
 /**
  * @brief Handle WiFi connect request
  */
 void handleWifiConnect(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -1335,7 +1251,7 @@ void handleWifiConnect(Webserver* webserver) {
  * @brief WiFi status
  */
 void handleWifiStatus(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -1487,7 +1403,7 @@ static void otaHandleAborted(HTTPUpload& /*upload*/) {
  * @param webserver Pointer to the Webserver instance
  */
 void handleLogsGet(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -1516,7 +1432,7 @@ void handleLogsGet(Webserver* webserver) {
  * @param webserver Pointer to the Webserver instance
  */
 void handleLogsDownload(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -1532,7 +1448,7 @@ void handleLogsDownload(Webserver* webserver) {
  * @param webserver Pointer to the Webserver instance
  */
 void handleLogsClear(Webserver* webserver) {
-    if (!requireBearerToken(webserver)) {
+    if (!requireAuth(webserver)) {
         return;
     }
 
@@ -1547,4 +1463,65 @@ void handleLogsClear(Webserver* webserver) {
 
     setCorsHeaders(webserver);
     webserver->raw().send(HTTP_CODE_OK, "application/json", json);
+}
+
+/**
+ * @brief Serialize a document and send it as a JSON response
+ *
+ * @param webserver Pointer to the Webserver instance
+ * @param code HTTP status code
+ * @param doc The document to send
+ *
+ * @return void
+ */
+void sendJson(Webserver* webserver, int code, const JsonDocument& doc) {
+    String out;
+    serializeJson(doc, out);
+
+    setCorsHeaders(webserver);
+    webserver->raw().send(code, "application/json", out);
+}
+
+/**
+ * @brief Send a short {status, message} response
+ *
+ * @param webserver Pointer to the Webserver instance
+ * @param code HTTP status code
+ * @param status Status word
+ * @param message Human readable detail
+ *
+ * @return void
+ */
+void sendStatus(Webserver* webserver, int code, const char* status, const char* message) {
+    JsonDocument doc;
+    doc["status"] = status;
+
+    if (message != nullptr) {
+        doc["message"] = message;
+    }
+
+    sendJson(webserver, code, doc);
+}
+
+/**
+ * @brief Parse the request body as JSON, replying with 400 on failure
+ *
+ * @param webserver Pointer to the Webserver instance
+ * @param doc Receives the parsed body
+ *
+ * @return true when the body parsed cleanly
+ */
+auto readJsonBody(Webserver* webserver, JsonDocument& doc) -> bool {
+    if (!webserver->raw().hasArg("plain") || webserver->raw().arg("plain").length() == 0) {
+        sendStatus(webserver, HTTP_CODE_BAD_REQUEST, "error", "Missing JSON body");
+        return false;
+    }
+
+    const DeserializationError error = deserializeJson(doc, webserver->raw().arg("plain"));
+    if (error) {
+        sendStatus(webserver, HTTP_CODE_BAD_REQUEST, "error", "Invalid JSON");
+        return false;
+    }
+
+    return true;
 }

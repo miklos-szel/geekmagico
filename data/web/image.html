@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pictures</title>
+    <link rel="stylesheet" href="./css/pico.min.css" />
+    <link rel="stylesheet" href="./css/style.css" />
+    <script src="./js/alpinejs.min.js" defer></script>
+    <script src="./js/utils.js"></script>
+    <script src="./js/themeSwitcher.js"></script>
+    <script src="./js/fileManager.js"></script>
+    <script src="./js/pageHandlers.js"></script>
+    <script src="./js/otaUploadHandler.js"></script>
+    <script src="./js/main.js"></script>
+  </head>
+  <body>
+    <div id="nav-placeholder" data-page="image"></div>
+    <main class="container">
+      <section>
+        <div class="gm-section" x-data="picturesPage()" x-init="init()">
+          <h2>1. Auto display</h2>
+          <div class="gm-row">
+            <label for="auto">Enable image auto display:</label>
+            <input id="auto" type="checkbox" x-model="cfg.auto_display" />
+          </div>
+          <div class="gm-row">
+            <label for="shuf">Random order (shuffle):</label>
+            <input id="shuf" type="checkbox" x-model="cfg.shuffle" x-bind:disabled="!cfg.auto_display" />
+          </div>
+          <div class="gm-row">
+            <label for="ivl">Image display interval:</label>
+            <input id="ivl" type="number" min="1" max="3600" x-model="cfg.interval_s" />
+            <span>s (seconds)</span>
+          </div>
+          <p class="gm-hint">
+            With auto display off, the picture chosen with SET below is shown
+            and held — shuffle only applies while auto display is on.
+          </p>
+          <p class="gm-hint">
+            Shuffle shows every picture once before any repeats, in a
+            different order each time through.
+          </p>
+          <button class="gm-save" @click="save()">Save</button>
+          <p class="gm-status" x-text="status"></p>
+        </div>
+
+        <div class="gm-section" x-data="fileManager('image')" x-init="init()">
+          <h2>2. Picture management</h2>
+          <div class="gm-files">
+            <p class="gm-hint">
+              1. JPG and GIF only.<br />
+              2. Resize images to 240x240 pixels before uploading.<br />
+              3. Pick individual files, or a whole folder at once.
+            </p>
+
+            <div class="gm-row">
+              <label for="pick">Choose files</label>
+              <input
+                id="pick"
+                type="file"
+                multiple
+                accept=".jpg,.jpeg,.gif,image/jpeg,image/gif"
+                @change="onPick($event)"
+              />
+            </div>
+            <div class="gm-row">
+              <label for="pickdir">…or a whole folder</label>
+              <input
+                id="pickdir"
+                type="file"
+                webkitdirectory
+                directory
+                multiple
+                @change="onPick($event)"
+              />
+            </div>
+            <p class="gm-hint">
+              Folders upload one file at a time — the device can only accept
+              one at once. Non-image files in the folder are skipped, and names
+              longer than 31 characters are shortened automatically because
+              that is all the device's filesystem can store.
+            </p>
+
+            <div class="gm-upload-actions">
+              <button @click="uploadAll()" x-bind:disabled="uploading">Upload</button>
+              <button class="secondary" @click="refresh()">Reload</button>
+              <button class="secondary" @click="clearQueue()">Clear</button>
+              <button class="contrast" @click="cancel()" x-show="uploading">Cancel</button>
+              <button
+                class="contrast"
+                @click="removeSelected()"
+                x-show="files.length > 0"
+                x-bind:disabled="deletingBulk"
+                x-text="selectedNames.length > 0
+                  ? `Delete selected (${selectedNames.length})`
+                  : 'Delete all'"
+              ></button>
+            </div>
+
+            <p class="gm-status" x-text="status"></p>
+            <div class="gm-progress" x-show="queue.length">
+              <template x-for="item in queue" :key="item.name">
+                <div>
+                  <span
+                    x-text="item.original && item.original !== item.name
+                      ? item.original + '  →  ' + item.name
+                      : item.name"
+                  ></span>
+                  <span x-text="item.state"></span>
+                </div>
+              </template>
+            </div>
+
+            <p class="gm-hint">
+              Free space: <span x-text="freeHR"></span> — path /image
+            </p>
+
+            <div class="gm-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>
+                      <input
+                        type="checkbox"
+                        :checked="allChecked"
+                        @change="toggleAll($event.target.checked)"
+                        aria-label="Select all pictures"
+                      />
+                    </th>
+                    <th>#</th><th>Name</th><th>Size</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="(f, i) in files" :key="f.name">
+                    <tr>
+                      <td>
+                        <input
+                          type="checkbox"
+                          x-model="checked[f.name]"
+                          :aria-label="'Select ' + f.name"
+                        />
+                      </td>
+                      <td x-text="i + 1"></td>
+                      <td x-text="f.name"></td>
+                      <td x-text="humanFileSize(f.size)"></td>
+                      <td>
+                        <div class="gm-file-actions">
+                          <button class="contrast" @click="remove(f.name)">Delete</button>
+                          <button @click="select(f.name)">Set</button>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
+                  <tr x-show="loaded && files.length === 0">
+                    <td colspan="5"><em>No pictures uploaded yet.</em></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+      <footer id="footer-placeholder"></footer>
+    </main>
+  </body>
+</html>

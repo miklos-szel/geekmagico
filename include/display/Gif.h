@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
- * GeekMagic Open Firmware
+ * GeekMagicO - a fork of GeekMagic Open Firmware
+ * <https://github.com/Times-Z/GeekMagic-Open-Firmware>
+ *
  * Copyright (C) 2026 Times-Z
+ * Copyright (C) 2026 GeekMagicO contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,6 +41,10 @@ class Gif {
     auto isPlaying() const -> bool;
     auto setLoopEnabled(bool enabled) -> void;
 
+    // Place the animation at an explicit top-left instead of centring it.
+    auto setPlacement(int16_t xPos, int16_t yPos) -> void;
+    auto clearPlacement() -> void;
+
    private:
     AnimatedGIF* m_gif;
     volatile bool m_playRequested;
@@ -59,6 +66,10 @@ class Gif {
     int16_t m_offsetX = 0;
     int16_t m_offsetY = 0;
     bool m_centered = false;
+
+    bool m_forcedPlacement = false;
+    int16_t m_forcedX = 0;
+    int16_t m_forcedY = 0;
 
     String m_currentPath;
 

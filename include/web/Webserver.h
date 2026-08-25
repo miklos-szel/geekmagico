@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
- * GeekMagic Open Firmware
+ * GeekMagicO - a fork of GeekMagic Open Firmware
+ * <https://github.com/Times-Z/GeekMagic-Open-Firmware>
+ *
  * Copyright (C) 2026 Times-Z
+ * Copyright (C) 2026 GeekMagicO contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -65,8 +68,27 @@ class Webserver {
     void onNotFound(std::function<void()> handler);
     ESP8266WebServer& raw();
 
+    void armLifetimeWindow(uint16_t lifetimeSeconds);
+    void disarmLifetimeWindow();
+    void setBusy(bool busy);
+    auto isBusy() const -> bool;
+    auto isClosed() const -> bool;
+    auto secondsRemaining() const -> uint16_t;
+
    private:
     ESP8266WebServer _server;
+
+    // Lifetime window: when armed, the server stops accepting connections
+    // once the window elapses. Recovery is a power-cycle, by design.
+    bool _lifetimeArmed = false;
+    bool _closed = false;
+    uint32_t _lifetimeExpiresAtMs = 0;
+    uint16_t _lifetimeSeconds = 0;
+
+    // Set while an upload or OTA is in flight so the window cannot cut it off.
+    bool _busy = false;
+
+    void checkLifetimeWindow();
 
     static const char* guessContentTypeC(const char* path);
 };
