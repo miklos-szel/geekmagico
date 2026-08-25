@@ -180,6 +180,10 @@ Issues and pull requests welcome at [github.com/miklos-szel/geekmagico](https://
 a full build; both must pass. See [`CLAUDE.md`](CLAUDE.md) for the conventions this codebase
 holds to.
 
+## Contact
+
+Questions, bug reports, or anything else: [hello@miklos-szel.com](mailto:hello@miklos-szel.com)
+
 ## License
 
 GPLv3 — see [LICENSE](LICENSE). Copyright is shared between the upstream author (Times-Z) and

@@ -2,6 +2,8 @@ openapi: "3.0.0"
 info:
   title: "GeekMagicO API"
   version: "1.0.0"
+  contact:
+    email: "hello@miklos-szel.com"
 servers:
   - 
     url: "http://{host}/"
@@ -12,7 +14,7 @@ servers:
 paths:
   /api/v1/wifi/scan:
     get:
-      summary: "Scan available WiFi networks"
+      summary: "Scan WiFi networks (async, poll until done)"
       operationId: "op_v1_get_api_v1_wifi_scan"
       responses:
         200:
@@ -32,7 +34,7 @@ paths:
       security:
         - 
           basicAuth: []
-      description: "Scan available WiFi networks. Requires HTTP Basic credentials when auth is enabled on the device (off by default)."
+      description: "Scan WiFi networks (async, poll until done). Requires HTTP Basic credentials when auth is enabled on the device (off by default)."
   /api/v1/wifi/connect:
     post:
       summary: "Connect to a WiFi network"

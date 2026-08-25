@@ -134,7 +134,7 @@ def _preprocess_multiline_annotations(text):
 def build_openapi(annotations):
     api = {
         'openapi': '3.0.0',
-        'info': {'title': 'GeekMagicO API', 'version': '1.0.0'},
+        'info': {'title': 'GeekMagicO API', 'version': '1.0.0', 'contact': {'email': 'hello@miklos-szel.com'}},
         'servers': [
             {
                 'url': 'http://{host}/',
