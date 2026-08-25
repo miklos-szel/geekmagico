@@ -65,6 +65,10 @@ static constexpr int LOADING_BAR_TEXT_X = 50;
 static constexpr int LOADING_BAR_TEXT_Y = 80;
 static constexpr int LOADING_BAR_Y = 110;
 static constexpr int LOADING_DELAY_MS = 1000;
+// How long the startup screen (which carries the device IP) stays up once the
+// device has joined a network, so the address can actually be read off the
+// panel before a screen takes over.
+static constexpr unsigned long BOOT_IP_HOLD_MS = 5000UL;
 static constexpr const char* METRICS_ENDPOINT = METRICS_URL;
 
 Webserver* webserver = nullptr;
@@ -199,6 +203,19 @@ void setup() {
     delay(LOADING_DELAY_MS);
 
     DisplayManager::drawStartup(wifiManager->getIP().toString());
+
+    // Keep the IP readable for a few seconds before a screen claims the panel.
+    // Not in AP mode: there the address is fixed and printed in the README, and
+    // the user is looking at the setup portal anyway. The web server is served
+    // during the hold so the device is reachable the moment the IP is shown.
+    if (WiFiManager::isConnected() && !wifiManager->isApMode()) {
+        const unsigned long holdStart = millis();
+
+        while (millis() - holdStart < BOOT_IP_HOLD_MS) {
+            webserver->handleClient();
+            yield();
+        }
+    }
 
     if (METRICS_ENDPOINT[0] != '\0' && WiFiManager::isConnected() && !wifiManager->isApMode()) {
         DashboardManager::begin(METRICS_ENDPOINT);
