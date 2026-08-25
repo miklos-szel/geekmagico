@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Time</title>
+    <link rel="stylesheet" href="./css/pico.min.css" />
+    <link rel="stylesheet" href="./css/style.css" />
+    <script src="./js/alpinejs.min.js" defer></script>
+    <script src="./js/utils.js"></script>
+    <script src="./js/themeSwitcher.js"></script>
+    <script src="./js/fileManager.js"></script>
+    <script src="./js/pageHandlers.js"></script>
+    <script src="./js/otaUploadHandler.js"></script>
+    <script src="./js/main.js"></script>
+  </head>
+  <body>
+    <div id="nav-placeholder" data-page="time"></div>
+    <main class="container">
+      <section x-data="timePage()" x-init="init()">
+        <div class="gm-section">
+          <h2>1. Time Zone</h2>
+          <div class="gm-row">
+            <label for="tzmode">Mode</label>
+            <select id="tzmode" x-model="cfg.tz_mode">
+              <option value="auto">Auto (from city location)</option>
+              <option value="manual">Manual</option>
+            </select>
+          </div>
+          <div class="gm-row">
+            <label for="tzoff">UTC Offset</label>
+            <select id="tzoff" x-model.number="cfg.utc_offset_min">
+              <option value="-720">UTC-12:00</option>
+              <option value="-690">UTC-11:30</option>
+              <option value="-660">UTC-11:00</option>
+              <option value="-630">UTC-10:30</option>
+              <option value="-600">UTC-10:00</option>
+              <option value="-570">UTC-09:30</option>
+              <option value="-540">UTC-09:00</option>
+              <option value="-510">UTC-08:30</option>
+              <option value="-480">UTC-08:00</option>
+              <option value="-450">UTC-07:30</option>
+              <option value="-420">UTC-07:00</option>
+              <option value="-390">UTC-06:30</option>
+              <option value="-360">UTC-06:00</option>
+              <option value="-330">UTC-05:30</option>
+              <option value="-300">UTC-05:00</option>
+              <option value="-270">UTC-04:30</option>
+              <option value="-240">UTC-04:00</option>
+              <option value="-210">UTC-03:30</option>
+              <option value="-180">UTC-03:00</option>
+              <option value="-150">UTC-02:30</option>
+              <option value="-120">UTC-02:00</option>
+              <option value="-90">UTC-01:30</option>
+              <option value="-60">UTC-01:00</option>
+              <option value="-30">UTC-00:30</option>
+              <option value="0">UTC+00:00</option>
+              <option value="30">UTC+00:30</option>
+              <option value="60">UTC+01:00</option>
+              <option value="90">UTC+01:30</option>
+              <option value="120">UTC+02:00</option>
+              <option value="150">UTC+02:30</option>
+              <option value="180">UTC+03:00</option>
+              <option value="210">UTC+03:30</option>
+              <option value="240">UTC+04:00</option>
+              <option value="270">UTC+04:30</option>
+              <option value="300">UTC+05:00</option>
+              <option value="330">UTC+05:30</option>
+              <option value="345">UTC+05:45</option>
+              <option value="360">UTC+06:00</option>
+              <option value="390">UTC+06:30</option>
+              <option value="420">UTC+07:00</option>
+              <option value="450">UTC+07:30</option>
+              <option value="480">UTC+08:00</option>
+              <option value="510">UTC+08:30</option>
+              <option value="525">UTC+08:45</option>
+              <option value="540">UTC+09:00</option>
+              <option value="570">UTC+09:30</option>
+              <option value="600">UTC+10:00</option>
+              <option value="630">UTC+10:30</option>
+              <option value="660">UTC+11:00</option>
+              <option value="690">UTC+11:30</option>
+              <option value="720">UTC+12:00</option>
+              <option value="750">UTC+12:30</option>
+              <option value="765">UTC+12:45</option>
+              <option value="780">UTC+13:00</option>
+              <option value="810">UTC+13:30</option>
+              <option value="825">UTC+13:45</option>
+              <option value="840">UTC+14:00</option>
+            </select>
+          </div>
+          <p class="gm-warn" x-show="cfg.tz_mode === 'auto' && !autoAvailable">
+            Automatic timezone needs an OpenWeatherMap API key — the keyless
+            weather service does not report a UTC offset. Until a key is set on
+            the Weather page, the manual offset above is used.
+          </p>
+          <p class="gm-hint">
+            Currently applying
+            <span x-text="(effectiveOffset >= 0 ? '+' : '') + (effectiveOffset / 60).toFixed(1) + ' h'"></span>
+          </p>
+          <button class="gm-save" @click="saveTz()">Save</button>
+          <p class="gm-status" x-text="tzStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>2. Time Number Color</h2>
+          <div class="gm-row">
+            <label for="ch">Hour:</label>
+            <input id="ch" type="color" x-model="cfg.hour_color" />
+          </div>
+          <div class="gm-row">
+            <label for="cm">Minutes:</label>
+            <input id="cm" type="color" x-model="cfg.minute_color" />
+          </div>
+          <div class="gm-row">
+            <label for="cs">Seconds:</label>
+            <input id="cs" type="color" x-model="cfg.second_color" />
+          </div>
+          <button class="gm-save" @click="saveColors()">Save</button>
+          <p class="gm-status" x-text="colorStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>3. 12/24 Hour Format</h2>
+          <div class="gm-row">
+            <label for="f12">Default is 24-hour, enable 12-hour:</label>
+            <input id="f12" type="checkbox" x-model="cfg.format12h" />
+          </div>
+          <button class="gm-save" @click="saveFormat()">Save</button>
+          <p class="gm-status" x-text="formatStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>4. Date Format</h2>
+          <div class="gm-row">
+            <label for="df">Format</label>
+            <select id="df" x-model="cfg.date_format">
+              <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+              <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+              <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+            </select>
+          </div>
+          <button class="gm-save" @click="saveDate()">Save</button>
+          <p class="gm-status" x-text="dateStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>5. Enable Colon Blink</h2>
+          <div class="gm-row">
+            <label for="cb">Enable</label>
+            <input id="cb" type="checkbox" x-model="cfg.colon_blink" />
+          </div>
+          <button class="gm-save" @click="saveBlink()">Save</button>
+          <p class="gm-status" x-text="blinkStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>6. Choose the Time Style Font</h2>
+          <div class="gm-row">
+            <label for="font">Font</label>
+            <select id="font" x-model.number="cfg.font">
+              <option value="0">Default Big Font</option>
+              <option value="1">Seven Segment</option>
+            </select>
+          </div>
+          <p class="gm-hint">
+            Applies to the Time Style themes. Seven Segment is drawn as vector
+            segments, so it costs no extra flash.
+          </p>
+          <button class="gm-save" @click="saveFont()">Save</button>
+          <p class="gm-status" x-text="fontStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>7. NTP Time server</h2>
+          <p class="gm-hint">
+            The device has a default time server built in. Setting your own
+            here makes it the preferred one.
+          </p>
+          <div class="gm-row">
+            <label for="ntp">NTP Server Domain:</label>
+            <input id="ntp" type="text" x-model="cfg.ntp_server" placeholder="pool.ntp.org" />
+          </div>
+          <button class="gm-save" @click="saveNtp()">Save</button>
+          <p class="gm-status" x-text="ntpStatus"></p>
+        </div>
+      </section>
+      <footer id="footer-placeholder"></footer>
+    </main>
+  </body>
+</html>

@@ -14,12 +14,8 @@
             "label": "Firmware binary"
           },
           {
-            "path": "**/littlefs-hellocubic.bin",
-            "label": "LittleFS - HelloCubic"
-          },
-          {
-            "path": "**/littlefs-smartTV.bin",
-            "label": "LittleFS - SmallTV Ultra"
+            "path": "**/littlefs.bin",
+            "label": "LittleFS filesystem"
           },
           {
             "path": "**/project.checksum",

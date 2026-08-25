@@ -83,10 +83,7 @@ function otaUploadHandler() {
       };
 
       this.xhr.open("POST", endpoint);
-      const token = localStorage.getItem("Authorization");
-      if (token) {
-        this.xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      }
+      this.xhr.withCredentials = true;
       this.xhr.send(formData);
     },
 

@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Settings</title>
+    <link rel="stylesheet" href="./css/pico.min.css" />
+    <link rel="stylesheet" href="./css/style.css" />
+    <script src="./js/alpinejs.min.js" defer></script>
+    <script src="./js/utils.js"></script>
+    <script src="./js/themeSwitcher.js"></script>
+    <script src="./js/fileManager.js"></script>
+    <script src="./js/pageHandlers.js"></script>
+    <script src="./js/otaUploadHandler.js"></script>
+    <script src="./js/main.js"></script>
+  </head>
+  <body>
+    <div id="nav-placeholder" data-page="settings"></div>
+    <main class="container">
+      <section x-data="settingsPage()" x-init="init()">
+        <div class="gm-section">
+          <h2>1. Choose theme</h2>
+          <p class="gm-hint">
+            Disable Auto switch below if you want to pick a theme manually.
+          </p>
+          <div class="gm-theme-grid">
+            <template x-for="(name, i) in themes" :key="i">
+              <button
+                :class="cfg.theme === i ? '' : 'secondary'"
+                @click="pickTheme(i)"
+                x-text="name"
+              ></button>
+            </template>
+          </div>
+          <p class="gm-status" x-text="themeStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>2. Auto Switch Themes</h2>
+          <div class="gm-checklist">
+            <template x-for="(name, i) in themes" :key="i">
+              <label>
+                <input type="checkbox" x-model="rotate[i]" />
+                <span x-text="(i + 1) + '. ' + name"></span>
+              </label>
+            </template>
+          </div>
+          <div class="gm-row">
+            <label for="asw">Enable:</label>
+            <input id="asw" type="checkbox" x-model="cfg.auto_switch" />
+            <label for="asi" style="min-width: auto">Interval (seconds):</label>
+            <input id="asi" type="number" min="3" max="3600" x-model="cfg.auto_switch_interval_s" />
+          </div>
+          <p class="gm-hint">
+            Tick at least two themes — with fewer there is nothing to switch
+            between.
+          </p>
+          <button class="gm-save" @click="saveSwitch()">Save</button>
+          <p class="gm-status" x-text="switchStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>3. Brightness</h2>
+          <div class="gm-row">
+            <span>0</span>
+            <input type="range" min="0" max="100" x-model="cfg.brightness" style="flex: 1" />
+            <span>100</span>
+            <strong x-text="cfg.brightness"></strong>
+          </div>
+          <button class="gm-save" @click="saveBrightness()">Save</button>
+          <p class="gm-status" x-text="brightnessStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>4. Night Mode</h2>
+          <div class="gm-row">
+            <label for="nm">Enable:</label>
+            <input id="nm" type="checkbox" x-model="cfg.night_mode" />
+          </div>
+          <div class="gm-row">
+            <label for="ns">Start Time:</label>
+            <input id="ns" type="time" x-model="cfg.night_start" />
+            <label for="ne" style="min-width: auto">End Time:</label>
+            <input id="ne" type="time" x-model="cfg.night_end" />
+          </div>
+          <div class="gm-row">
+            <label for="nb">Brightness at night:</label>
+            <input id="nb" type="range" min="0" max="100" x-model="cfg.night_brightness" style="flex: 1" />
+            <strong x-text="cfg.night_brightness"></strong>
+          </div>
+          <p class="gm-hint">
+            Windows crossing midnight are fine — 22:00 to 07:00 works as you
+            would expect.
+          </p>
+          <button class="gm-save" @click="saveNight()">Save</button>
+          <p class="gm-status" x-text="nightStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>5. Screen Rotation</h2>
+          <div class="gm-row">
+            <label for="rot">Rotation</label>
+            <select id="rot" x-model.number="cfg.rotation">
+              <option value="0">0 — normal (SmallTV Ultra)</option>
+              <option value="1">1 — landscape right</option>
+              <option value="2">2 — upside down</option>
+              <option value="3">3 — landscape left</option>
+              <option value="4">4 — mirrored portrait</option>
+              <option value="5">5 — mirrored landscape right</option>
+              <option value="6">6 — mirrored upside down</option>
+              <option value="7">7 — mirrored landscape left</option>
+            </select>
+          </div>
+          <button class="gm-save" @click="saveRotation()">Save</button>
+          <p class="gm-status" x-text="rotationStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>6. Web security</h2>
+          <p class="gm-hint">
+            Both controls are optional and off by default, matching the stock
+            firmware.
+          </p>
+          <div class="gm-row">
+            <label for="authOn">Require a password:</label>
+            <input id="authOn" type="checkbox" x-model="web.auth_enabled" />
+          </div>
+          <div class="gm-row">
+            <label for="authUser">Username:</label>
+            <input id="authUser" type="text" x-model="web.user" autocomplete="off" />
+          </div>
+          <div class="gm-row">
+            <label for="authPass">Password:</label>
+            <input
+              id="authPass"
+              type="password"
+              x-model="web.password"
+              autocomplete="new-password"
+              :placeholder="web.password_set ? '•••••••• (set — leave blank to keep)' : 'not set'"
+            />
+          </div>
+          <p class="gm-hint">
+            Set a password before enabling the checkbox, otherwise the device
+            refuses the change rather than locking you out.
+          </p>
+
+          <div class="gm-row">
+            <label for="life">Web server lifetime:</label>
+            <input id="life" type="number" min="0" max="65535" x-model="web.lifetime_s" />
+            <span>seconds (0 = always on)</span>
+          </div>
+          <p class="gm-warn">
+            With a lifetime set, the web interface shuts down that many seconds
+            after boot and the device serves nothing at all — useful when it
+            lives on a shelf as a photo frame.
+            <strong>Power-cycle the device to get back in.</strong>
+            It is never armed while in setup (AP) mode, and never interrupts an
+            upload or firmware update.
+          </p>
+          <p class="gm-hint" x-show="web.lifetime_remaining_s > 0">
+            Closing in <span x-text="web.lifetime_remaining_s"></span> s.
+          </p>
+          <button class="gm-save" @click="saveWeb()">Save</button>
+          <p class="gm-status" x-text="webStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>7. Firmware update</h2>
+          <div x-data="otaUploadHandler()">
+            <form @submit.prevent="uploadFile">
+              <div class="gm-row">
+                <input type="file" x-ref="fileInput" required accept=".bin" />
+                <select x-model="uploadType">
+                  <option value="firmware">Firmware</option>
+                  <option value="fs">Filesystem (web UI)</option>
+                </select>
+                <button type="submit" class="gm-save" x-bind:disabled="uploading">Upload</button>
+              </div>
+            </form>
+            <template x-if="uploading">
+              <div>
+                <progress max="100" :value="progress"></progress>
+                <div class="gm-row">
+                  <strong x-text="progress + '%'"></strong>
+                  <span x-text="etaText"></span>
+                  <button type="button" class="contrast" @click="cancelUpload">Cancel</button>
+                </div>
+              </div>
+            </template>
+            <p class="gm-status" x-text="uploadMessage"></p>
+          </div>
+        </div>
+
+        <div class="gm-section">
+          <h2>8. Logs</h2>
+          <div class="gm-upload-actions">
+            <button class="secondary" @click="fetchLogs()">Refresh</button>
+          </div>
+          <p class="gm-hint">
+            Only warnings and errors are kept in memory. Attach a serial
+            console for full output.
+          </p>
+          <div class="gm-progress">
+            <template x-for="(line, i) in logs" :key="i">
+              <div><span x-text="line"></span></div>
+            </template>
+            <div x-show="logs.length === 0"><em>No logs loaded.</em></div>
+          </div>
+        </div>
+
+        <div class="gm-section">
+          <h2>9. Factory Reset &amp; Reboot</h2>
+          <p class="gm-hint">
+            Settings are cleared; uploaded pictures are not affected.
+          </p>
+          <div class="gm-upload-actions">
+            <button class="contrast" @click="factoryReset()">Reset</button>
+            <button class="secondary" @click="reboot()">Reboot</button>
+          </div>
+          <p class="gm-status" x-text="resetStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>10. Device</h2>
+          <p class="gm-hint">
+            Model <span x-text="info.model || '—'"></span> ·
+            <span x-text="info.firmware || 'GeekMagicO'"></span>
+            <span x-text="info.version || ''"></span>
+          </p>
+          <p class="gm-hint">
+            IP <span x-text="info.ip || '—'"></span> ·
+            free heap <span x-text="info.free_heap || 0"></span> B ·
+            storage free <span x-text="humanFileSize(info.fs_free || 0)"></span>
+          </p>
+          <p class="gm-hint">
+            Active theme: <span x-text="info.theme_name || '—'"></span>
+          </p>
+        </div>
+      </section>
+      <footer id="footer-placeholder"></footer>
+    </main>
+  </body>
+</html>

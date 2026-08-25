@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Network</title>
+    <link rel="stylesheet" href="./css/pico.min.css" />
+    <link rel="stylesheet" href="./css/style.css" />
+    <script src="./js/alpinejs.min.js" defer></script>
+    <script src="./js/utils.js"></script>
+    <script src="./js/themeSwitcher.js"></script>
+    <script src="./js/fileManager.js"></script>
+    <script src="./js/pageHandlers.js"></script>
+    <script src="./js/otaUploadHandler.js"></script>
+    <script src="./js/main.js"></script>
+  </head>
+  <body>
+    <div id="nav-placeholder" data-page="network"></div>
+    <main class="container">
+      <section x-data="networkPage()" x-init="init()">
+        <div class="gm-section">
+          <h2>1. Set your city first</h2>
+          <p class="gm-hint">
+            Used for weather and, in automatic mode, for the timezone.
+          </p>
+          <div class="gm-row">
+            <label for="city">Input your city location:</label>
+            <input id="city" type="text" x-model="city" placeholder="vienna" />
+          </div>
+          <p class="gm-hint">
+            Location example: for the capital city of Korea, enter
+            <code>Seoul</code>. A numeric OpenWeatherMap city ID also works.
+          </p>
+          <button class="gm-save" @click="saveCity()">Save</button>
+          <p class="gm-status" x-text="cityStatus"></p>
+        </div>
+
+        <div class="gm-section">
+          <h2>2. Set internet connection</h2>
+          <div class="gm-upload-actions">
+            <button @click="scan()" x-bind:disabled="scanning">
+              <span x-show="!scanning">Rescan</span>
+              <span x-show="scanning">Scanning…</span>
+            </button>
+          </div>
+          <p class="gm-danger">
+            Select a WiFi network with a strong signal. 2.4GHz only — the
+            ESP8266 has no 5GHz radio.
+          </p>
+
+          <div class="gm-scroll" x-show="networks.length">
+            <table>
+              <thead>
+                <tr><th>SSID</th><th>Signal</th><th></th></tr>
+              </thead>
+              <tbody>
+                <template x-for="(net, i) in networks" :key="net.ssid + '-' + i">
+                  <tr>
+                    <td x-text="net.ssid"></td>
+                    <td x-text="(net.rssi || 0) + ' dBm'"></td>
+                    <td style="text-align: right">
+                      <button @click="use(net)">Use</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="gm-row">
+            <label for="ssid">WiFi Name:</label>
+            <input id="ssid" type="text" x-model="ssid" autocomplete="off" />
+          </div>
+          <div class="gm-row">
+            <label for="wifipass">WiFi Password:</label>
+            <input
+              id="wifipass"
+              :type="showPassword ? 'text' : 'password'"
+              x-model="password"
+              autocomplete="off"
+            />
+            <label style="min-width: auto">
+              <input type="checkbox" x-model="showPassword" /> show
+            </label>
+          </div>
+          <button class="gm-save" @click="connect()">Save</button>
+          <p class="gm-status" x-text="wifiStatus"></p>
+
+          <p class="gm-warn">
+            After connecting successfully the "GeekMagicO" hotspot is turned
+            off and the new IP address is shown on the screen. Connect your
+            phone or computer to the same WiFi and open that address to keep
+            changing settings.
+          </p>
+          <p class="gm-hint" x-show="connected">
+            Currently connected — IP <span x-text="ip"></span>
+          </p>
+        </div>
+      </section>
+      <footer id="footer-placeholder"></footer>
+    </main>
+  </body>
+</html>

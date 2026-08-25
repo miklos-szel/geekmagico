@@ -1,16 +1,30 @@
+document.addEventListener("DOMContentLoaded", () => {
+  const nav = document.getElementById("nav-placeholder");
+  if (nav) {
+    includeHTML("nav-placeholder", "./nav.html", () => {
+      // Mark the current tab so the nav shows where you are.
+      const page = nav.getAttribute("data-page");
+      const link = nav.querySelector(`a[data-page="${page}"]`);
+      if (link) link.classList.add("active");
+    });
+  }
+
+  if (document.getElementById("footer-placeholder")) {
+    includeHTML("footer-placeholder", "./footer.html");
+  }
+});
+
 document.addEventListener("alpine:init", () => {
-  Alpine.data("themeSwitcher", themeSwitcher);
-  if (typeof otaUploadHandler !== "undefined")
-    Alpine.data("otaUploadHandler", otaUploadHandler);
-  if (typeof gifUploadHandler !== "undefined")
-    Alpine.data("gifUploadHandler", gifUploadHandler);
-  if (typeof wifiHandler !== "undefined")
-    Alpine.data("wifiHandler", wifiHandler);
-  if (typeof ntpHandler !== "undefined") Alpine.data("ntpHandler", ntpHandler);
-  if (typeof rotationHandler !== "undefined")
-    Alpine.data("rotationHandler", rotationHandler);
-  if (typeof rebootHandler !== "undefined")
-    Alpine.data("rebootHandler", rebootHandler);
-  if (typeof tokenHandler !== "undefined")
-    Alpine.data("tokenHandler", tokenHandler);
+  const register = (name, fn) => {
+    if (typeof fn !== "undefined") Alpine.data(name, fn);
+  };
+
+  register("themeSwitcher", typeof themeSwitcher !== "undefined" ? themeSwitcher : undefined);
+  register("otaUploadHandler", typeof otaUploadHandler !== "undefined" ? otaUploadHandler : undefined);
+  register("fileManager", typeof fileManager !== "undefined" ? fileManager : undefined);
+  register("networkPage", typeof networkPage !== "undefined" ? networkPage : undefined);
+  register("weatherPage", typeof weatherPage !== "undefined" ? weatherPage : undefined);
+  register("timePage", typeof timePage !== "undefined" ? timePage : undefined);
+  register("picturesPage", typeof picturesPage !== "undefined" ? picturesPage : undefined);
+  register("settingsPage", typeof settingsPage !== "undefined" ? settingsPage : undefined);
 });

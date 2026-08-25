@@ -229,3 +229,246 @@ details.dropdown ul li a:hover {
   width: 18px;
   height: 18px;
 }
+
+/* ---------------------------------------------------------------------------
+   GeekMagicO five-tab layout
+   Mirrors the stock firmware's shape: a dark top nav, then numbered sections
+   each with a red left rule and their own SAVE button.
+   --------------------------------------------------------------------------- */
+
+.gm-nav {
+  background: var(--pico-card-background-color, #2c3136);
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 1rem;
+}
+
+.gm-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.75rem;
+  justify-content: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gm-nav a {
+  color: var(--pico-color);
+  font-size: 1.15rem;
+  padding: 0.25rem 0.25rem;
+  text-decoration: none;
+}
+
+.gm-nav a:hover {
+  text-decoration: underline;
+}
+
+.gm-nav a.active {
+  border-bottom: 2px solid var(--pico-primary);
+  font-weight: 600;
+}
+
+.gm-section {
+  margin-bottom: 2rem;
+}
+
+.gm-section > h2 {
+  background: var(--pico-card-sectioning-background-color, #383d42);
+  border-left: 6px solid #e5484d;
+  font-size: 1rem;
+  font-weight: 400;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.85rem;
+}
+
+.gm-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.gm-row > label {
+  margin: 0;
+  min-width: 10rem;
+}
+
+.gm-row input,
+.gm-row select {
+  margin: 0;
+  width: auto;
+}
+
+/* Pico sizes checkboxes and radios itself; the width:auto above collapses
+   them to a sliver, so restore their intended box. */
+.gm-row input[type="checkbox"],
+.gm-row input[type="radio"] {
+  block-size: 1.25rem;
+  inline-size: 1.25rem;
+}
+
+.gm-row input[type="range"] {
+  min-inline-size: 8rem;
+}
+
+.gm-row input[type="color"] {
+  block-size: 2.2rem;
+  inline-size: 4rem;
+  padding: 2px;
+}
+
+.gm-hint {
+  color: var(--pico-muted-color);
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.gm-warn {
+  color: #f0a24a;
+}
+
+.gm-danger {
+  color: #e5484d;
+}
+
+.gm-theme-grid {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  margin-bottom: 1rem;
+}
+
+.gm-theme-grid button {
+  margin: 0;
+}
+
+.gm-checklist {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.gm-checklist label {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.gm-checklist input {
+  margin: 0;
+}
+
+.gm-files {
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.gm-files table {
+  margin-bottom: 0;
+}
+
+.gm-files td,
+.gm-files th {
+  padding: 0.4rem 0.5rem;
+  vertical-align: middle;
+}
+
+.gm-files td button {
+  margin: 0;
+  padding: 0.25rem 0.9rem;
+  width: auto;
+}
+
+.gm-file-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.gm-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.gm-upload-actions button {
+  margin: 0;
+  width: auto;
+}
+
+.gm-progress {
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.gm-progress div {
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0.15rem 0;
+}
+
+.gm-status {
+  margin-top: 0.5rem;
+  min-height: 1.2rem;
+}
+
+.gm-save {
+  width: auto;
+}
+
+.gm-scroll {
+  overflow-x: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   Compact scale
+   Pico's --pico-font-size grows up to 131% at wide viewports, and its buttons
+   double their horizontal padding — fine for a marketing page, oversized for
+   a dense settings UI on a small device's admin panel. Pin the root size and
+   tighten spacing regardless of viewport width; this rule has no @media
+   guard, so it wins over every one of Pico's breakpoint versions by simply
+   coming later in the cascade.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --pico-font-size: 87.5%;
+  --pico-spacing: 0.75rem;
+  --pico-form-element-spacing-vertical: 0.45rem;
+  --pico-form-element-spacing-horizontal: 0.75rem;
+  --pico-line-height: 1.4;
+}
+
+button,
+[type="submit"],
+[type="button"],
+[type="reset"],
+[role="button"] {
+  --pico-form-element-spacing-horizontal: 0.9rem;
+  font-size: 0.9rem;
+}
+
+h1 {
+  --pico-font-size: 1.5rem;
+}
+
+h3 {
+  --pico-font-size: 1.05rem;
+}
+
+.gm-hint,
+.gm-status,
+.gm-progress,
+.gm-files td,
+.gm-files th {
+  font-size: 0.85rem;
+}

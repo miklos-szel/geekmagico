@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
- * GeekMagic Open Firmware
+ * GeekMagicO - a fork of GeekMagic Open Firmware
+ * <https://github.com/Times-Z/GeekMagic-Open-Firmware>
+ *
  * Copyright (C) 2026 Times-Z
+ * Copyright (C) 2026 GeekMagicO contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,14 +25,15 @@
 
 #include <ArduinoJson.h>
 #include "config/SecureStorage.h"
+#include "config/Settings.h"
 #include <string>
 #include <cstdint>
 #include <SPI.h>
 
-// LCD configuration defaults for hellocubic lite
+// LCD configuration defaults for SmallTV Ultra
 static constexpr int16_t LCD_W = 240;
 static constexpr int16_t LCD_H = 240;
-static constexpr uint8_t LCD_ROTATION = 4;
+static constexpr uint8_t LCD_ROTATION = 0;
 static constexpr int8_t LCD_MOSI_GPIO = 13;
 static constexpr int8_t LCD_SCK_GPIO = 14;
 static constexpr int8_t LCD_DC_GPIO = 0;
@@ -47,8 +51,14 @@ class ConfigManager {
     void setWiFi(const char* newSsid, const char* newPassword);
     const char* getSSID() const;
     const char* getPassword() const;
-    const char* getApiToken() const;
-    void setApiToken(const char* newApiToken);
+    bool isWebAuthEnabled() const;
+    void setWebAuthEnabled(bool enabled);
+    const char* getWebUser() const;
+    void setWebUser(const char* newUser);
+    String getWebPassword() const;
+    void setWebPassword(const char* newPassword);
+    uint16_t getWebLifetimeSeconds() const;
+    void setWebLifetimeSeconds(uint16_t seconds);
     uint8_t getLCDRotation() const;
     void setLCDRotation(uint8_t newRotation);
     uint32_t getLCDSpiHz() const;
@@ -57,11 +67,21 @@ class ConfigManager {
     uint8_t getLCDRotationSafe() const { return lcd_rotation; }
     std::string ssid;
     std::string password;
-    std::string api_token;
     std::string filename;
     SecureStorage secure;
-    uint8_t lcd_rotation = 4;
+    uint8_t lcd_rotation = 0;
     std::string ntp_server;
+
+    // Web access control. Auth is opt-in so the device behaves like the stock
+    // firmware out of the box; the password itself lives in SecureStorage.
+    bool web_auth_enabled = false;
+    std::string web_user = "admin";
+
+    // Seconds the web server stays up after boot; 0 keeps it up forever.
+    uint16_t web_lifetime_s = 0;
+
+    // Weather, clock, album and display preferences.
+    Settings settings;
 
     const char* getNtpServer() const { return ntp_server.c_str(); }
     void setNtpServer(const char* s) {

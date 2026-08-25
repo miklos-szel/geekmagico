@@ -10,22 +10,11 @@ function humanFileSize(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
+// Auth is optional and handled by the browser: when HTTP Basic is enabled on
+// the device the browser prompts and then attaches credentials itself, so
+// there is nothing to manage here.
 function apiFetch(url, options = {}) {
-  const token = localStorage.getItem("Authorization");
-
-  const fetchOptions = { ...options };
-
-  if (!fetchOptions.headers) {
-    fetchOptions.headers = {};
-  } else {
-    fetchOptions.headers = { ...fetchOptions.headers };
-  }
-
-  if (token) {
-    fetchOptions.headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  return fetch(url, fetchOptions);
+  return fetch(url, { credentials: "same-origin", ...options });
 }
 
 function includeHTML(id, url, callback) {
@@ -36,28 +25,3 @@ function includeHTML(id, url, callback) {
       if (typeof callback === "function") callback();
     });
 }
-
-function setHeaderTitle(title) {
-  const interval = setInterval(() => {
-    const h1 = document.getElementById("header-title");
-    if (h1) {
-      h1.textContent = title;
-      clearInterval(interval);
-    }
-  }, 20);
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  if (document.getElementById("header-placeholder")) {
-    includeHTML("header-placeholder", "./header.html", () => {
-      let pageTitle =
-        document.title && document.title.trim()
-          ? document.title.trim()
-          : "Placeholder Title";
-      setHeaderTitle(pageTitle);
-    });
-  }
-  if (document.getElementById("footer-placeholder")) {
-    includeHTML("footer-placeholder", "./footer.html");
-  }
-});
