@@ -76,10 +76,11 @@ void Backlight::begin(uint8_t brightnessPercent) {
     analogWriteRange(PWM_RANGE);
     analogWriteFreq(PWM_FREQ_HZ);
 
-    initialized = true;
     dayPercent = std::min<uint8_t>(PERCENT_MAX, brightnessPercent);
+    currentPercent = dayPercent;
+    initialized = true;
 
-    Backlight::setBrightness(dayPercent);
+    writeDuty(currentPercent);
 
     Logger::info(("Backlight PWM ready at " + String(dayPercent) + "%").c_str(), "Backlight");
 }
@@ -150,6 +151,8 @@ void Backlight::configureNightMode(bool enabled, uint16_t startMinute, uint16_t 
     if (!enabled && nightActive) {
         nightActive = false;
         Backlight::setBrightness(dayPercent);
+    } else if (enabled && nightActive) {
+        Backlight::setBrightness(nightPercent);
     }
 }
 

@@ -437,6 +437,8 @@ auto WeatherClient::refreshNow() -> bool {
 
     if (currentWeather.tzOffsetKnown) {
         TimeService::setAutoOffsetSeconds(currentWeather.tzOffsetSeconds);
+    } else {
+        TimeService::clearAutoOffset();
     }
 
     Logger::info((String("Weather updated: ") + String(currentWeather.tempC, 1) + "C " +

@@ -46,6 +46,7 @@ class WeatherClockScreen : public Screen {
     String _tempCache;
     String _conditionCache;
     String _detailCache;
+    String _noDataCache;
     uint8_t _lastCondition = 0xFF;
     bool _gifStarted = false;
 };

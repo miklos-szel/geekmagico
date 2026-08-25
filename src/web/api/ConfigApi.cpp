@@ -49,6 +49,7 @@ namespace {
 constexpr const char* TAG = "API";
 constexpr int REBOOT_DELAY_MS = 1000;
 constexpr uint8_t MAX_ROTATION = 7;
+constexpr uint8_t MAX_PERCENT = 100;
 
 /**
  * @brief Persist settings and report failure to the client
@@ -364,7 +365,12 @@ void displayConfigSet(Webserver* webserver) {
         cfg.auto_switch_mask = doc["auto_switch_mask"].as<uint8_t>();
     }
     if (doc["brightness"].is<uint8_t>()) {
-        cfg.brightness = doc["brightness"].as<uint8_t>();
+        const uint8_t brightness = doc["brightness"].as<uint8_t>();
+        if (brightness > MAX_PERCENT) {
+            sendStatus(webserver, HTTP_CODE_BAD_REQUEST, "error", "brightness must be 0-100");
+            return;
+        }
+        cfg.brightness = brightness;
     }
     if (doc["night_mode"].is<bool>()) {
         cfg.night_mode = doc["night_mode"].as<bool>();
@@ -376,7 +382,12 @@ void displayConfigSet(Webserver* webserver) {
         cfg.night_end = hhmmToMinutes(doc["night_end"].as<const char*>(), cfg.night_end);
     }
     if (doc["night_brightness"].is<uint8_t>()) {
-        cfg.night_brightness = doc["night_brightness"].as<uint8_t>();
+        const uint8_t nightBrightness = doc["night_brightness"].as<uint8_t>();
+        if (nightBrightness > MAX_PERCENT) {
+            sendStatus(webserver, HTTP_CODE_BAD_REQUEST, "error", "night_brightness must be 0-100");
+            return;
+        }
+        cfg.night_brightness = nightBrightness;
     }
     if (doc["rotation"].is<uint8_t>()) {
         const uint8_t rotation = doc["rotation"].as<uint8_t>();
@@ -437,7 +448,19 @@ void webConfigSet(Webserver* webserver) {
         configManager.setWebUser(doc["user"].as<const char*>());
     }
     if (doc["password"].is<const char*>()) {
-        configManager.setWebPassword(doc["password"].as<const char*>());
+        const char* newPassword = doc["password"].as<const char*>();
+        const bool authWillBeEnabled =
+            doc["auth_enabled"].is<bool>() ? doc["auth_enabled"].as<bool>() : configManager.isWebAuthEnabled();
+
+        // An empty password while auth stays enabled falls back to the
+        // fail-open path in checkAuth(); require it to be cleared alongside
+        // auth_enabled instead of letting it happen by surprise.
+        if (authWillBeEnabled && newPassword[0] == '\0') {
+            sendStatus(webserver, HTTP_CODE_BAD_REQUEST, "error", "Password cannot be empty while auth is enabled");
+            return;
+        }
+
+        configManager.setWebPassword(newPassword);
     }
     if (doc["lifetime_s"].is<uint16_t>()) {
         configManager.setWebLifetimeSeconds(doc["lifetime_s"].as<uint16_t>());
@@ -536,7 +559,7 @@ void registerConfigApi(Webserver* webserver) {
     webserver->raw().on("/api/v1/weather/config", HTTP_GET, [webserver]() { weatherConfigGet(webserver); });
 
     // @openapi {post} /weather/config version=v1 group=Weather summary="Set weather settings" requiresAuth=true
-    // requestBody=application/json requestBodySchema=city:string,api_key:string,interval_min:integer
+    // requestBody=application/json requestBodySchema=city:string?,api_key:string?,interval_min:integer?
     // responses=200:application/json,400:application/json,401:application/json
     webserver->raw().on("/api/v1/weather/config", HTTP_POST, [webserver]() { weatherConfigSet(webserver); });
 
@@ -553,7 +576,7 @@ void registerConfigApi(Webserver* webserver) {
     webserver->raw().on("/api/v1/time/config", HTTP_GET, [webserver]() { timeConfigGet(webserver); });
 
     // @openapi {post} /time/config version=v1 group=Time summary="Set clock settings" requiresAuth=true
-    // requestBody=application/json requestBodySchema=tz_mode:string,format12h:boolean,date_format:string
+    // requestBody=application/json requestBodySchema=tz_mode:string?,format12h:boolean?,date_format:string?
     // responses=200:application/json,400:application/json,401:application/json
     webserver->raw().on("/api/v1/time/config", HTTP_POST, [webserver]() { timeConfigSet(webserver); });
 
@@ -571,7 +594,7 @@ void registerConfigApi(Webserver* webserver) {
     webserver->raw().on("/api/v1/display/config", HTTP_GET, [webserver]() { displayConfigGet(webserver); });
 
     // @openapi {post} /display/config version=v1 group=Display summary="Set display settings" requiresAuth=true
-    // requestBody=application/json requestBodySchema=theme:integer,brightness:integer,night_mode:boolean
+    // requestBody=application/json requestBodySchema=theme:integer?,brightness:integer?,night_mode:boolean?
     // responses=200:application/json,400:application/json,401:application/json
     webserver->raw().on("/api/v1/display/config", HTTP_POST, [webserver]() { displayConfigSet(webserver); });
 
@@ -580,7 +603,7 @@ void registerConfigApi(Webserver* webserver) {
     webserver->raw().on("/api/v1/web/config", HTTP_GET, [webserver]() { webConfigGet(webserver); });
 
     // @openapi {post} /web/config version=v1 group=System summary="Set web security settings" requiresAuth=true
-    // requestBody=application/json requestBodySchema=auth_enabled:boolean,password:string,lifetime_s:integer
+    // requestBody=application/json requestBodySchema=auth_enabled:boolean?,password:string?,lifetime_s:integer?
     // responses=200:application/json,400:application/json,401:application/json
     webserver->raw().on("/api/v1/web/config", HTTP_POST, [webserver]() { webConfigSet(webserver); });
 

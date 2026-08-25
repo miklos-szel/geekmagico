@@ -38,7 +38,7 @@ class WiFiManager {
     // Asynchronous scan. A blocking scan makes the radio hop channels for
     // seconds, which drops any client connected to the device's own access
     // point mid-request - so the browser never sees the response.
-    static void startScan();
+    static auto startScan() -> void;
     static auto scanInProgress() -> bool;
     static auto collectScanResults(JsonArray& out) -> int8_t;
     bool connectToNetwork(const char* ssid, const char* pass, uint32_t timeoutMs = 10000);

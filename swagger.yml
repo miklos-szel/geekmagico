@@ -860,10 +860,7 @@ paths:
                   type: "string"
                 interval_min:
                   type: "integer"
-              required:
-                - "city"
-                - "api_key"
-                - "interval_min"
+              required: []
         required: true
   /api/v1/weather/current:
     get:
@@ -974,10 +971,7 @@ paths:
                   type: "boolean"
                 date_format:
                   type: "string"
-              required:
-                - "tz_mode"
-                - "format12h"
-                - "date_format"
+              required: []
         required: true
   /api/v1/pictures/config:
     get:
@@ -1107,10 +1101,7 @@ paths:
                   type: "integer"
                 night_mode:
                   type: "boolean"
-              required:
-                - "theme"
-                - "brightness"
-                - "night_mode"
+              required: []
         required: true
   /api/v1/web/config:
     get:
@@ -1175,10 +1166,7 @@ paths:
                   type: "string"
                 lifetime_s:
                   type: "integer"
-              required:
-                - "auth_enabled"
-                - "password"
-                - "lifetime_s"
+              required: []
         required: true
   /api/v1/system/info:
     get:

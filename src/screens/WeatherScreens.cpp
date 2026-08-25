@@ -66,6 +66,7 @@ void WeatherClockScreen::enter() {
     _tempCache = "";
     _conditionCache = "";
     _detailCache = "";
+    _noDataCache = "";
     _lastCondition = 0xFF;
     _gifStarted = false;
 
@@ -108,8 +109,23 @@ void WeatherClockScreen::tick() {
                           MUTED, BG_COLOR, ALIGN_CENTER);
 
     if (!weather.valid) {
-        DrawUtils::cachedText(PANEL_W / 2, 120, "No weather data", _conditionCache, 2, MUTED, BG_COLOR, ALIGN_CENTER);
+        // Clear whatever was painted the last time weather was valid so it
+        // doesn't linger behind the fallback message.
+        DrawUtils::cachedText(232, 120, "", _tempCache, 5, ACCENT, BG_COLOR, ALIGN_RIGHT);
+        DrawUtils::cachedText(232, 168, "", _conditionCache, 2, MUTED, BG_COLOR, ALIGN_RIGHT);
+        DrawUtils::cachedText(232, 196, "", _detailCache, 2, MUTED, BG_COLOR, ALIGN_RIGHT);
+
+        if (!_gifStarted && _lastCondition != 0xFF) {
+            DisplayManager::getGfx()->fillRect(8, 116, GIF_BOX, GIF_BOX, BG_COLOR);
+            _lastCondition = 0xFF;
+        }
+
+        DrawUtils::cachedText(PANEL_W / 2, 120, "No weather data", _noDataCache, 2, MUTED, BG_COLOR, ALIGN_CENTER);
         return;
+    }
+
+    if (_noDataCache.length() != 0) {
+        DrawUtils::cachedText(PANEL_W / 2, 120, "", _noDataCache, 2, MUTED, BG_COLOR, ALIGN_CENTER);
     }
 
     // When no GIF is configured the icon takes the slot the GIF would occupy.

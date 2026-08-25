@@ -97,7 +97,7 @@ auto WiFiManager::startStationMode() -> bool {
  *
  * @return void
  */
-void WiFiManager::startScan() {
+auto WiFiManager::startScan() -> void {
     if (WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
         return;
     }

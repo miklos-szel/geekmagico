@@ -58,7 +58,7 @@ class Webserver {
     explicit Webserver(uint16_t port = 80);
     static auto beginFS(bool formatIfFailed = false) -> bool;
     void begin();
-    void handleClient();
+    auto handleClient() -> void;
     void on(const String& uri, HTTPMethod method, std::function<void()> handler);
     void on(const String& uri, std::function<void()> handler);
     void serveStaticC(const char* uriC, const char* pathC, const char* contentTypeC = nullptr,
@@ -68,9 +68,9 @@ class Webserver {
     void onNotFound(std::function<void()> handler);
     ESP8266WebServer& raw();
 
-    void armLifetimeWindow(uint16_t lifetimeSeconds);
-    void disarmLifetimeWindow();
-    void setBusy(bool busy);
+    auto armLifetimeWindow(uint16_t lifetimeSeconds) -> void;
+    auto disarmLifetimeWindow() -> void;
+    auto setBusy(bool busy) -> void;
     auto isBusy() const -> bool;
     auto isClosed() const -> bool;
     auto secondsRemaining() const -> uint16_t;
@@ -88,7 +88,7 @@ class Webserver {
     // Set while an upload or OTA is in flight so the window cannot cut it off.
     bool _busy = false;
 
-    void checkLifetimeWindow();
+    auto checkLifetimeWindow() -> void;
 
     static const char* guessContentTypeC(const char* path);
 };

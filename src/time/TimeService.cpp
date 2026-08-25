@@ -80,6 +80,19 @@ void TimeService::setAutoOffsetSeconds(int32_t offsetSeconds) {
 }
 
 /**
+ * @brief Forget the weather-provided UTC offset
+ *
+ * Called when a fetch succeeds but the provider did not report an offset
+ * (the keyless fallback never does), so a stale offset from an earlier
+ * fetch does not keep being applied.
+ *
+ * @return void
+ */
+void TimeService::clearAutoOffset() {
+    autoOffsetKnown = false;
+}
+
+/**
  * @brief The offset currently being applied, in minutes
  *
  * @return Offset in minutes

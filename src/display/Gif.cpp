@@ -248,7 +248,35 @@ auto Gif::gifDraw(GIFDRAW* pDraw) -> void  // NOLINT(readability-function-cognit
     const auto xPos = static_cast<int>(rawX + (s_instance != nullptr ? s_instance->m_offsetX : 0));
     const auto yPos = static_cast<int>(rawY + (s_instance != nullptr ? s_instance->m_offsetY : 0));
 
+    const bool endOfFrame = (pDraw->y == static_cast<int>(pDraw->iHeight - 1));
+
+    // Close out the SPI transaction and roll the disposal bookkeeping forward
+    // on the frame's last row, even when that row is clipped away below. A
+    // fully off-panel frame must not leave startWrite() unmatched.
+    auto closeFrameIfDone = [&]() {
+        if (!endOfFrame) {
+            return;
+        }
+
+        if (s_instance != nullptr && s_instance->m_inFrameWrite) {
+            tft->endWrite();
+            s_instance->m_inFrameWrite = false;
+        }
+
+        if (s_instance != nullptr) {
+            s_instance->m_havePrev = true;
+            s_instance->m_prevDisposal = s_instance->m_curDisposal;
+            s_instance->m_prevHadTransparency = s_instance->m_curHadTransparency;
+            s_instance->m_prevX = s_instance->m_curX;
+            s_instance->m_prevY = s_instance->m_curY;
+            s_instance->m_prevW = s_instance->m_curW;
+            s_instance->m_prevH = s_instance->m_curH;
+            s_instance->m_prevBg = s_instance->m_curBg;
+        }
+    };
+
     if (yPos < 0 || yPos >= static_cast<int>(gfx->height())) {
+        closeFrameIfDone();
         return;
     }
 
@@ -285,8 +313,6 @@ auto Gif::gifDraw(GIFDRAW* pDraw) -> void  // NOLINT(readability-function-cognit
     if (xPos >= screenW || (xPos + drawW) <= 0) {
         skipDraw = true;
     }
-
-    const bool endOfFrame = (pDraw->y == static_cast<int>(pDraw->iHeight - 1));
 
     bool needClearLine = false;
     int clearStart = 0;
@@ -428,23 +454,7 @@ auto Gif::gifDraw(GIFDRAW* pDraw) -> void  // NOLINT(readability-function-cognit
         }
     }
 
-    if (endOfFrame) {
-        if (s_instance != nullptr && s_instance->m_inFrameWrite) {
-            tft->endWrite();
-            s_instance->m_inFrameWrite = false;
-        }
-
-        if (s_instance != nullptr) {
-            s_instance->m_havePrev = true;
-            s_instance->m_prevDisposal = s_instance->m_curDisposal;
-            s_instance->m_prevHadTransparency = s_instance->m_curHadTransparency;
-            s_instance->m_prevX = s_instance->m_curX;
-            s_instance->m_prevY = s_instance->m_curY;
-            s_instance->m_prevW = s_instance->m_curW;
-            s_instance->m_prevH = s_instance->m_curH;
-            s_instance->m_prevBg = s_instance->m_curBg;
-        }
-    }
+    closeFrameIfDone();
 }
 
 /**

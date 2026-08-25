@@ -191,6 +191,9 @@ void filesSet(Webserver* webserver) {
 void uploadBegin(Webserver* webserver) {
     uploadFailed = false;
     uploadMessage = "";
+    // Cleared up front so a rejected request can't have uploadFinish() act on
+    // a still-existing file from the previous, unrelated upload.
+    uploadPath = "";
 
     if (!checkAuth(webserver)) {
         uploadFailed = true;

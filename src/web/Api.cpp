@@ -480,7 +480,7 @@ void handleGifUpload(Webserver* webserver) {
         JsonDocument doc;
 
         doc["status"] = "error";
-        doc["message"] = "Invalid or missing token";
+        doc["message"] = AUTH_FAIL_MESSAGE;
 
         String json;
         serializeJson(doc, json);
@@ -851,7 +851,7 @@ void handleOtaUpload(Webserver* webserver, int mode) {
 
         JsonDocument doc;
         doc["status"] = "error";
-        doc["message"] = "Invalid or missing token";
+        doc["message"] = AUTH_FAIL_MESSAGE;
 
         String json;
 
@@ -895,7 +895,7 @@ void handleOtaFinished(Webserver* webserver) {
     if (!checkAuth(webserver)) {
         JsonDocument doc;
         doc["status"] = "error";
-        doc["message"] = "Invalid or missing token";
+        doc["message"] = AUTH_FAIL_MESSAGE;
 
         String json;
         serializeJson(doc, json);

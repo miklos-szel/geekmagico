@@ -118,6 +118,35 @@ SIZE=240
 converted=0
 skipped=0
 failed=0
+used_names=()
+
+# Register $1 as taken, disambiguating with a numeric suffix (kept within
+# MAX_NAME) if the checksum tag from shorten_name still collided. Sets
+# $claimed_name; must be called directly (not via command substitution) so
+# it can record the claim in the shared used_names array.
+claim_name() {
+    local candidate="$1" ext="$2" stem_part suffix room
+
+    if ! printf '%s\n' "${used_names[@]}" | grep -Fxq "$candidate"; then
+        used_names+=("$candidate")
+        claimed_name="$candidate"
+        return
+    fi
+
+    stem_part="${candidate%"$ext"}"
+    suffix=2
+    while :; do
+        room=$(( MAX_NAME - ${#ext} - ${#suffix} - 1 ))
+        [ "$room" -lt 1 ] && room=1
+        candidate="${stem_part:0:$room}-${suffix}${ext}"
+        if ! printf '%s\n' "${used_names[@]}" | grep -Fxq "$candidate"; then
+            used_names+=("$candidate")
+            claimed_name="$candidate"
+            return
+        fi
+        suffix=$((suffix + 1))
+    done
+}
 
 # -print0 so names with spaces survive.
 while IFS= read -r -d '' file; do
@@ -143,6 +172,8 @@ while IFS= read -r -d '' file; do
         outname="$(printf 'img%03d%s' "$seq" "$target_ext")"
     else
         outname="$(shorten_name "$stem" "$target_ext" "$base")"
+        claim_name "$outname" "$target_ext"
+        outname="$claimed_name"
     fi
 
     out="$DEST/$outname"

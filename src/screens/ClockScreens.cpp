@@ -71,6 +71,7 @@ void TimeStyleScreen::enter() {
     _dateCache = "";
     _extraCache = "";
     _lastColonVisible = true;
+    _colonPainted = false;
     _lastDigits.fill(DIGIT_BLANK);
 }
 
@@ -199,8 +200,9 @@ void TimeStyleScreen::drawSevenSegment(const LocalTime& local) {
     }
 
     const bool colonOn = TimeService::colonVisible(local, cfg.colon_blink);
-    if (colonOn != _lastColonVisible) {
+    if (colonOn != _lastColonVisible || !_colonPainted) {
         _lastColonVisible = colonOn;
+        _colonPainted = true;
 
         const auto colonX =
             static_cast<int16_t>(((gfx->width() - groupWidth) / 2) + (FIRST_COLON_OFFSET * SEG_DIGIT_W) + (2 * SEG_GAP));

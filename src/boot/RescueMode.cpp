@@ -435,12 +435,16 @@ static void handleRescueReset() {
  * This is the escape hatch for a forgotten web password or a web lifetime
  * window that locked the device down.
  */
-static void handleRescueFactoryReset() {
+static auto handleRescueFactoryReset() -> void {
     JsonDocument doc;
 
     bool removedConfig = true;
-    if (LittleFS.begin() && LittleFS.exists("/config.json")) {
-        removedConfig = LittleFS.remove("/config.json");
+    if (LittleFS.begin()) {
+        if (LittleFS.exists("/config.json")) {
+            removedConfig = LittleFS.remove("/config.json");
+        }
+    } else {
+        removedConfig = false;
     }
 
     configManager.secure.remove("wifi_ssid");

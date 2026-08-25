@@ -102,6 +102,10 @@ void PhotoAlbumScreen::enter() {
     if (cfg.auto_display && cfg.shuffle && total >= MIN_SHUFFLE_IMAGES) {
         PhotoAlbumScreen::reseedShuffle(total);
         _index = static_cast<uint16_t>(random(0, total));
+        // showCurrent() below displays this picture without going through
+        // advance(), so account for it here or the pass runs one image long
+        // and repeats this one right before the next reseed.
+        _shuffleRemaining--;
     }
 
     // With auto display off the user pinned one file; honour it and hold.

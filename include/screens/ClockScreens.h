@@ -72,6 +72,7 @@ class TimeStyleScreen : public Screen {
     String _dateCache;
     String _extraCache;
     bool _lastColonVisible = true;
+    bool _colonPainted = false;
     std::array<uint8_t, 4> _lastDigits{};
 };
 

@@ -661,6 +661,7 @@ auto DisplayManager::playGifFullScreen(const String& path, uint32_t timeMs) -> b
     }
 
     g_gif->stop();
+    g_gif->clearPlacement();
 
     if (!g_gif->begin()) {
         return false;

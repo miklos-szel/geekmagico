@@ -5,6 +5,10 @@ Simple OpenAPI generator for @openapi annotations in C++ sources
 Scans the src/ and include/ folders for lines containing
   // @openapi {METHOD} /path summary="..." [requestBody=TYPE] [requestBodySchema=field:type,...] responses=CODE:CONTENTTYPE[,...]
 
+requestBodySchema fields default to required; append '?' to a type
+(e.g. 'field:string?') to mark a field optional, for endpoints that accept
+a partial body.
+
 and emits openapi.json (v3) to stdout
 """
 import re
@@ -37,24 +41,33 @@ def _derive_version(path):
 def parse_request_body_schema(schema_str):
     """
     Parse request body schema string like 'field1:string,field2:number'
-    Returns a schema object with properties and required fields
+    Returns a schema object with properties and required fields.
+
+    A type suffixed with '?' (e.g. 'field:string?') marks that field as
+    optional - most POST bodies in this API are partial updates where every
+    field may be omitted, so mark those explicitly rather than defaulting
+    every field to required.
     """
     if not schema_str:
         return {'type': 'object'}
-    
+
     schema = {
         'type': 'object',
         'properties': {},
         'required': []
     }
-    
+
     for field_def in schema_str.split(','):
         field_def = field_def.strip()
         if ':' in field_def:
             field_name, field_type = field_def.split(':', 1)
             field_name = field_name.strip()
             field_type = field_type.strip()
-            
+
+            optional = field_type.endswith('?')
+            if optional:
+                field_type = field_type[:-1].strip()
+
             # Map common types to OpenAPI types
             type_map = {
                 'string': 'string',
@@ -66,11 +79,12 @@ def parse_request_body_schema(schema_str):
                 'array': 'array',
                 'object': 'object',
             }
-            
+
             openapi_type = type_map.get(field_type.lower(), 'string')
             schema['properties'][field_name] = {'type': openapi_type}
-            schema['required'].append(field_name)
-    
+            if not optional:
+                schema['required'].append(field_name)
+
     return schema
 
 

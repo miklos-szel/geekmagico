@@ -116,13 +116,17 @@ void Webserver::begin() {
  *
  * @return void
  */
-void Webserver::handleClient() {
+auto Webserver::handleClient() -> void {
+    if (_closed) {
+        return;
+    }
+
+    checkLifetimeWindow();
     if (_closed) {
         return;
     }
 
     _server.handleClient();
-    checkLifetimeWindow();
 }
 
 /**
@@ -136,7 +140,7 @@ void Webserver::handleClient() {
  *
  * @return void
  */
-void Webserver::armLifetimeWindow(uint16_t lifetimeSeconds) {
+auto Webserver::armLifetimeWindow(uint16_t lifetimeSeconds) -> void {
     if (lifetimeSeconds == 0) {
         disarmLifetimeWindow();
         return;
@@ -154,7 +158,7 @@ void Webserver::armLifetimeWindow(uint16_t lifetimeSeconds) {
  *
  * @return void
  */
-void Webserver::disarmLifetimeWindow() {
+auto Webserver::disarmLifetimeWindow() -> void {
     _lifetimeArmed = false;
     _lifetimeSeconds = 0;
 }
@@ -169,7 +173,7 @@ void Webserver::disarmLifetimeWindow() {
  *
  * @return void
  */
-void Webserver::setBusy(bool busy) { _busy = busy; }
+auto Webserver::setBusy(bool busy) -> void { _busy = busy; }
 
 /**
  * @brief Whether a transfer is currently in flight
@@ -210,7 +214,7 @@ auto Webserver::secondsRemaining() const -> uint16_t {
  *
  * @return void
  */
-void Webserver::checkLifetimeWindow() {
+auto Webserver::checkLifetimeWindow() -> void {
     if (!_lifetimeArmed || _closed) {
         return;
     }

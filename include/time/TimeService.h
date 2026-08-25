@@ -54,6 +54,7 @@ class TimeService {
     static auto hasTime() -> bool;
 
     static void setAutoOffsetSeconds(int32_t offsetSeconds);
+    static void clearAutoOffset();
     static auto offsetMinutes() -> int16_t;
 
     static auto formatTime(const LocalTime& local, bool format12h, bool showSeconds) -> String;
