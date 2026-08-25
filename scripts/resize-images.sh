@@ -15,8 +15,11 @@
 # the device's LittleFS can store (LFS_NAME_MAX is 32 and it rejects anything
 # at or beyond that). Pass --number for plain img001.jpg, img002.jpg naming.
 #
-# JPGs are re-encoded as JPG; GIFs stay animated GIFs. The upload page accepts
-# both. Requires ImageMagick (`brew install imagemagick`).
+# JPG/PNG/BMP/WEBP/HEIC/HEIF are all re-encoded as JPG; GIFs stay animated
+# GIFs. The upload page accepts JPG and GIF. Requires ImageMagick built with
+# HEIC support (the Homebrew formula pulls in libheif automatically); check
+# with: magick -list format | grep -i heic
+# Requires ImageMagick (`brew install imagemagick`).
 
 set -euo pipefail
 
@@ -72,6 +75,16 @@ else
     exit 1
 fi
 
+# HEIC is an optional ImageMagick delegate (libheif). Only check for it when
+# the source folder actually has one, so this never nags a user who has none.
+if find "$SRC" -maxdepth 1 -type f \( -iname "*.heic" -o -iname "*.heif" \) -print -quit 2>/dev/null | grep -q .; then
+    if ! "$IM" -list format 2>/dev/null | grep -qi '^ *HEIC.*HEIC.*rw'; then
+        echo "Found HEIC/HEIF files, but this ImageMagick has no HEIC decoder." >&2
+        echo "Install it with: brew install libheif && brew reinstall imagemagick" >&2
+        exit 1
+    fi
+fi
+
 DEST="${DEST:-$SRC/240}"
 mkdir -p "$DEST"
 
@@ -114,7 +127,7 @@ while IFS= read -r -d '' file; do
     lower="$(printf '%s' "$ext" | tr '[:upper:]' '[:lower:]')"
 
     case "$lower" in
-        jpg|jpeg|png|bmp|webp|gif) ;;
+        jpg|jpeg|png|bmp|webp|gif|heic|heif) ;;
         *) skipped=$((skipped + 1)); continue ;;
     esac
 

@@ -49,4 +49,5 @@ config.json
 .DS_Store
 
 # Local scratch/test data
+tmp/
 tmptmp/

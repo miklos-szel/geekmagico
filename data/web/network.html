@@ -54,7 +54,7 @@
                 <tr><th>SSID</th><th>Signal</th><th></th></tr>
               </thead>
               <tbody>
-                <template x-for="net in networks" :key="net.ssid">
+                <template x-for="(net, i) in networks" :key="net.ssid + '-' + i">
                   <tr>
                     <td x-text="net.ssid"></td>
                     <td x-text="(net.rssi || 0) + ' dBm'"></td>

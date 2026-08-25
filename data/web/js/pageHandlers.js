@@ -98,7 +98,24 @@ function networkPage() {
           await new Promise((r) => setTimeout(r, 800));
         }
 
-        this.networks.sort((a, b) => (b.rssi || 0) - (a.rssi || 0));
+        // A real scan commonly reports the same SSID more than once (mesh
+        // and dual-band routers broadcast one name from several radios/
+        // channels), and Alpine's x-for keys on SSID — duplicates collide and
+        // silently render nothing at all, not just extra rows. Keep the
+        // strongest signal per name and drop anything with no name at all
+        // (an empty SSID is unusable to "Use" anyway).
+        const bestByName = new Map();
+        for (const net of this.networks) {
+          if (!net.ssid) continue;
+          const prev = bestByName.get(net.ssid);
+          if (!prev || (net.rssi || -999) > (prev.rssi || -999)) {
+            bestByName.set(net.ssid, net);
+          }
+        }
+        this.networks = [...bestByName.values()].sort(
+          (a, b) => (b.rssi || 0) - (a.rssi || 0),
+        );
+
         this.wifiStatus = this.networks.length
           ? `Found ${this.networks.length} network(s)`
           : "No networks found — try again";
