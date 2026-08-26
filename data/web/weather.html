@@ -138,51 +138,11 @@
         </div>
 
         <div class="gm-section" x-data="fileManager('gif')" x-init="init()">
-          <h2>7. Weather Screen Icon</h2>
-          <fieldset class="gm-row">
-            <legend>Icon</legend>
-            <label>
-              <input
-                type="radio"
-                name="iconmode"
-                value="auto"
-                :checked="iconMode === 'auto'"
-                @change="setIconMode('auto')"
-              />
-              Match the weather
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="iconmode"
-                value="simple"
-                :checked="iconMode === 'simple'"
-                @change="setIconMode('simple')"
-              />
-              Simple icons
-            </label>
-          </fieldset>
+          <h2>7. Gif In The Weather Screen</h2>
           <p class="gm-hint">
-            Applies as soon as you pick one — no Save needed.
-          </p>
-          <p class="gm-hint" x-show="iconMode === 'custom'">
-            Currently showing your own GIF, <strong x-text="cfg.gif"></strong>,
-            for every condition. Pick an option above to go back.
-          </p>
-          <p class="gm-status" x-text="iconStatus"></p>
-          <p class="gm-hint">
-            <strong>Match the weather</strong> plays the built-in
-            <code>wx-*.gif</code> animations below, following the current
-            conditions. <strong>Simple icons</strong> draws them instead, using
-            no files at all. Pressing Set on any file plays that one GIF for
-            every condition.
-          </p>
-          <p class="gm-hint">
-            GIFs are centred in an 80x80 box and clipped to it, so 80x80 gives
-            the best result. The <code>wx-*.gif</code> files are the built-in
-            animations — deleting them frees space and drops those conditions
-            back to the simple icons. Flashing <code>littlefs.bin</code>
-            restores them.
+            Resize GIFs to 80x80 pixels before uploading — they are centred in
+            an 80x80 box and clipped to it. Use SET to choose which one appears
+            on the weather screen; with none set, the built-in icon is drawn.
           </p>
           <div class="gm-files">
             <input

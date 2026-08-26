@@ -117,42 +117,30 @@ differs. Full-screen redraws on a 40MHz SPI bus visibly flicker and starve the l
 The ST7789 needs **SPI mode 3** and a vendor init sequence; CS is tied to GND on this board.
 Don't "simplify" `lcdRunVendorInit()` — see `docs/hardware.md` for why each step is there.
 
-## Weather icons
+## The GIF decoder is the biggest single allocation here
 
-`data/gif/wx-*.gif` is **generated**, never hand-edited or hand-optimised. It comes from
-`scripts/build-weather-gifs.sh`, which renders [Meteocons](https://github.com/basmilius/meteocons)
-Lottie sources (MIT, `licenses/meteocons-LICENSE`) to 80x80 GIFs.
+`AnimatedGIF` is **24,172 bytes in one block** and `playGifAt()` holds it for as long as the
+screen is up. This device idles near 20KB free, so that allocation routinely cannot be met.
 
-The script enforces a **20KB per file / 200KB total** budget and fails the build rather than
-warning. That is not neatness: the filesystem is 2MB, the web UI already spends ~248KB, and the
-rest is what users have for their own pictures. It also asserts every file is exactly 80x80 and
-loops inside `GIF_MAX_MS_PER_FILE`, since a slower single pass is an icon that stops dead and
-never restarts.
+Two things make this worse than an ordinary failed malloc, and both cost a released version to
+learn:
 
-Two things that bit during the first build and will bite again:
+- On this core, plain `operator new` calls `__unhandled_exception(PSTR("OOM"))` instead of
+  returning `nullptr` (`cores/esp8266/abi.cpp`). A `if (p == nullptr)` check after a plain `new`
+  is **dead code** — the panic happens first. It reboots as `"Software/System restart"`, not an
+  exception or a watchdog, which makes it easy to misread. Use `new (std::nothrow)` for anything
+  large, as `Gif::begin()` now does.
+- That reboot lands inside `BOOT_STABLE_MS`, so the boot never marks clean. Three of them and the
+  device is in Rescue Mode — a crash that looks like a brick to the user.
 
-- cairosvg resolves lottie layer **masks** to fully transparent, so a masked layer vanishes
-  silently — `partly-cloudy-day` renders as a bare cloud with no sun. The script strips masks
-  before rendering. Only that one icon carries any, and its masks were redundant anyway.
-- python-lottie ignores `--fps`. Frame rate is dialled in with `--gif-skip-frames`.
+`Gif::begin()` refuses up front unless the heap can carry the decoder plus 8KB of slack. Winning
+the allocation only to starve WiFi and the web server is no better than losing it.
 
-A render that comes out as a single frame is a failure *unless the source has no animated
-properties* (`not-available` genuinely does not). The script checks the source rather than
-special-casing the name, so never "fix" that check by hardcoding an exception.
-
-`"auto"` **is** the shipped default, since the icons ship in `littlefs.bin` anyway. Know what
-that costs: `AnimatedGIF` measures **24,172 bytes** on this build and `playGifAt()` holds it for
-as long as the screen is up, so the weather clock now carries that allocation as its normal
-state. It was verified working on hardware before the default was flipped — but compare the
-JPEGDEC note above, where a ~17.5KB contiguous allocation *fails*, and treat the free-heap line
-in `src/main.cpp` as the tripwire if anything here grows.
-
-The icons are **deliberately deletable** — they list, Set and delete like any uploaded file so
-users can reclaim the space. `startConditionGif()` in `src/screens/WeatherScreens.cpp` treats a
-missing file as normal and falls back to the vector glyph for that condition alone. Note
-`FilesApi.cpp` only clears `weather.gif` on an exact filename match, which is what keeps the
-`"auto"` sentinel alive when an individual icon is deleted; don't "improve" that into a
-prefix match.
+**Per-condition animated weather icons were tried and withdrawn** (v1.3.0/v1.3.1, removed in
+v1.3.2). Ten bundled GIFs cost 123KB of filesystem and, more importantly, made the weather screen
+allocate the decoder on its own. Replacing it with a purpose-built raw frame format was measured
+and does not pay off either: shared-palette per-line RLE came to 355KB and RLE-plus-delta to 314KB
+for the same ten icons. Don't retry this without a plan for the 24KB.
 
 ## Screen geometry
 

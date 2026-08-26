@@ -545,19 +545,6 @@ def _files_key(h: APIHandler) -> str:
     return f"files.{d}"
 
 
-def _seed_gif_files() -> list:
-    """The bundled wx-*.gif set, read from data/gif so the mock cannot drift."""
-    gif_dir = os.path.normpath(os.path.join(BASE_PATH, "..", "gif"))
-    bundled = []
-    if os.path.isdir(gif_dir):
-        for name in sorted(os.listdir(gif_dir)):
-            if name.startswith("wx-") and name.endswith(".gif"):
-                bundled.append(
-                    {"name": name, "size": os.path.getsize(os.path.join(gif_dir, name))}
-                )
-    return bundled + [{"name": "spaceman.gif", "size": 61000}]
-
-
 @router.route("GET", "/api/v1/files")
 def files_list(h: APIHandler):
     if not check_auth(h):
@@ -566,7 +553,7 @@ def files_list(h: APIHandler):
     files = h.state.get(key)
     if files is None:
         files = [{"name": "sample.jpg", "size": 21000}] if key.endswith("image") \
-            else _seed_gif_files()
+            else [{"name": "spaceman.gif", "size": 61000}]
         h.state.set(key, files)
     used = sum(f["size"] for f in files)
     h.json_response({
