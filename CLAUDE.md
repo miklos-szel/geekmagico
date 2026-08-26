@@ -154,6 +154,21 @@ Users arrive from the stock firmware via a two-step OTA documented in the README
 (`src/main.cpp`) — which is exactly the state step 1 leaves behind. **Don't make that route
 conditional on anything else**, or first-time installs strand users with no web UI.
 
+## Releases
+
+Release notes **must say which images the user has to flash**. The two go out separately and
+the web UI talks to the firmware's API, so a release that changed `data/web` and ships as
+"firmware only" leaves the old page reading fields that no longer exist — the UI looks broken
+while the device underneath is fine.
+
+Decide it mechanically: `git diff <prev-tag>..<tag> -- data/`. Anything under `data/web`
+means both images. Put it at the top of the "Installing" section as a bold one-liner, and
+when `littlefs.bin` is required, say that flashing it replaces the whole filesystem —
+uploaded pictures and `config.json` are lost, WiFi credentials in EEPROM survive.
+
+Tag as `vX.Y.Z-geekmagico` and build the release binaries **after** tagging, or
+`PROJECT_VER_STR` carries a `-N-g<sha>-dev` suffix into what users install.
+
 ## Licensing
 
 GPL-3.0. Every source file carries upstream's `Copyright (C) 2026 Times-Z` line alongside the
