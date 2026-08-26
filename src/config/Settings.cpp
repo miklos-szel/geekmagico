@@ -49,8 +49,6 @@ constexpr int HOUR_MAX = 23;
 constexpr int MINUTE_MAX = 59;
 constexpr uint16_t WEATHER_INTERVAL_MIN = 1;
 constexpr uint16_t WEATHER_INTERVAL_MAX = 1440;
-constexpr int16_t UTC_OFFSET_MIN_MINUTES = -720;
-constexpr int16_t UTC_OFFSET_MAX_MINUTES = 840;
 constexpr uint8_t FONT_MAX = 3;
 constexpr uint16_t PICTURE_INTERVAL_MIN = 1;
 constexpr uint16_t PICTURE_INTERVAL_MAX = 3600;
@@ -290,6 +288,8 @@ void settingsFromJson(JsonObjectConst root, Settings& out) {
         readString(timeCfg, "tz_mode", out.time.tz_mode);
         readNumber<int16_t>(timeCfg, "utc_offset_min", out.time.utc_offset_min, UTC_OFFSET_MIN_MINUTES,
                             UTC_OFFSET_MAX_MINUTES);
+        readNumber<int16_t>(timeCfg, "auto_offset_min", out.time.auto_offset_min, UTC_OFFSET_MIN_MINUTES,
+                            UTC_OFFSET_MAX_MINUTES);
         readColor(timeCfg, "hour_color", out.time.hour_color);
         readColor(timeCfg, "minute_color", out.time.minute_color);
         readColor(timeCfg, "second_color", out.time.second_color);
@@ -346,6 +346,7 @@ void settingsToJson(const Settings& settings, JsonObject root) {
     JsonObject timeCfg = childObject(root, "time");
     writeMember(timeCfg, "tz_mode", settings.time.tz_mode.c_str());
     writeMember(timeCfg, "utc_offset_min", settings.time.utc_offset_min);
+    writeMember(timeCfg, "auto_offset_min", settings.time.auto_offset_min);
     writeMember(timeCfg, "hour_color", settings.time.hour_color);
     writeMember(timeCfg, "minute_color", settings.time.minute_color);
     writeMember(timeCfg, "second_color", settings.time.second_color);

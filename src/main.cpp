@@ -39,6 +39,7 @@
 #include "weather/WeatherClient.h"
 #include "screens/ScreenManager.h"
 #include "time/TimeService.h"
+#include "time/TimeZoneClient.h"
 #include "display/Backlight.h"
 #include <array>
 
@@ -141,6 +142,10 @@ void setup() {
         Logger::info("Configuration loaded successfully");
     }
 
+    // Apply the last resolved offset straight away so the clock is not visibly
+    // wrong for the seconds it takes to join WiFi and look one up again.
+    TimeService::restoreCachedOffset();
+
     if (RescueMode::checkBootLoop()) {
         RescueMode::run();
         EspClass::wdtEnable(WDTO_2S);
@@ -168,6 +173,7 @@ void setup() {
     ntpClient->begin();
 
     WeatherClient::begin();
+    TimeZoneClient::begin();
 
     const DisplaySettings& displayCfg = configManager.settings.display;
     Backlight::configureNightMode(displayCfg.night_mode, displayCfg.night_start, displayCfg.night_end,
@@ -263,6 +269,8 @@ void loop() {
     }
 
     WeatherClient::loop();
+
+    TimeZoneClient::loop();
 
     // Cheap: only touches the backlight pin on a day/night transition.
     Backlight::applySchedule(TimeService::now().minutesOfDay);

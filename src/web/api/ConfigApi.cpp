@@ -24,6 +24,7 @@
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <Logger.h>
+#include <cstring>
 
 #include "web/Api.h"
 #include "web/Webserver.h"
@@ -34,6 +35,7 @@
 #include "screens/ScreenManager.h"
 #include "storage/FileStore.h"
 #include "time/TimeService.h"
+#include "time/TimeZoneClient.h"
 #include "weather/WeatherClient.h"
 #include "wireless/WiFiManager.h"
 #include "project_version.h"
@@ -196,10 +198,12 @@ void timeConfigGet(Webserver* webserver) {
     doc["font"] = cfg.font;
     doc["ntp_server"] = configManager.getNtpServer();
 
-    // The keyless weather provider carries no UTC offset, so tell the UI when
-    // "auto" cannot actually resolve one.
-    doc["auto_offset_available"] = WeatherClient::current().tzOffsetKnown;
+    // "Auto" can resolve from more than one place, and which one is in effect
+    // is the difference between a right and a wrong clock - so name it rather
+    // than making the UI guess from the weather provider.
+    doc["offset_source"] = TimeService::sourceLabel(TimeService::activeSource());
     doc["effective_offset_min"] = TimeService::offsetMinutes();
+    doc["tz_status"] = TimeZoneClient::lastStatus();
 
     sendJson(webserver, HTTP_CODE_OK, doc);
 }
@@ -216,11 +220,24 @@ void timeConfigSet(Webserver* webserver) {
 
     TimeSettings& cfg = configManager.settings.time;
 
-    assignString(doc, "tz_mode", cfg.tz_mode);
+    if (doc["tz_mode"].is<const char*>()) {
+        const char* mode = doc["tz_mode"].as<const char*>();
+        if (mode == nullptr || (strcmp(mode, "auto") != 0 && strcmp(mode, "manual") != 0)) {
+            sendStatus(webserver, HTTP_CODE_BAD_REQUEST, "error", "tz_mode must be auto or manual");
+            return;
+        }
+        cfg.tz_mode = mode;
+    }
+
     assignString(doc, "date_format", cfg.date_format);
 
     if (doc["utc_offset_min"].is<int16_t>()) {
-        cfg.utc_offset_min = doc["utc_offset_min"].as<int16_t>();
+        const int16_t offset = doc["utc_offset_min"].as<int16_t>();
+        if (offset < UTC_OFFSET_MIN_MINUTES || offset > UTC_OFFSET_MAX_MINUTES) {
+            sendStatus(webserver, HTTP_CODE_BAD_REQUEST, "error", "utc_offset_min out of range");
+            return;
+        }
+        cfg.utc_offset_min = offset;
     }
     if (doc["hour_color"].is<const char*>()) {
         cfg.hour_color = hexToRgb565(doc["hour_color"].as<const char*>(), cfg.hour_color);
@@ -576,7 +593,7 @@ void registerConfigApi(Webserver* webserver) {
     webserver->raw().on("/api/v1/time/config", HTTP_GET, [webserver]() { timeConfigGet(webserver); });
 
     // @openapi {post} /time/config version=v1 group=Time summary="Set clock settings" requiresAuth=true
-    // requestBody=application/json requestBodySchema=tz_mode:string?,format12h:boolean?,date_format:string?
+    // requestBody=application/json requestBodySchema=tz_mode:string?,utc_offset_min:integer?,format12h:boolean?,date_format:string?
     // responses=200:application/json,400:application/json,401:application/json
     webserver->raw().on("/api/v1/time/config", HTTP_POST, [webserver]() { timeConfigSet(webserver); });
 

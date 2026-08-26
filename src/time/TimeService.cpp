@@ -40,9 +40,32 @@ constexpr int HOURS_PER_HALF_DAY = 12;
 constexpr size_t TIME_BUF_SIZE = 16;
 constexpr size_t DATE_BUF_SIZE = 16;
 
-// Offset reported by the weather provider, used when tz_mode is "auto".
-int32_t autoOffsetSeconds = 0;
-bool autoOffsetKnown = false;
+// One slot per automatic source; TZ_OFFSET_MANUAL is read from config instead.
+std::array<int32_t, TZ_OFFSET_SOURCE_COUNT> sourceSeconds{};
+std::array<bool, TZ_OFFSET_SOURCE_COUNT> sourceKnown{};
+
+/**
+ * @brief Highest-precedence source that currently has an offset
+ *
+ * @return The winning source, TZ_OFFSET_MANUAL when nothing was resolved
+ */
+auto winningSource() -> TzOffsetSource {
+    const TimeSettings& cfg = configManager.settings.time;
+
+    if (cfg.tz_mode == "manual") {
+        return TZ_OFFSET_MANUAL;
+    }
+
+    for (uint8_t src = TZ_OFFSET_SOURCE_COUNT - 1; src > TZ_OFFSET_MANUAL; --src) {
+        if (sourceKnown.at(src)) {
+            return static_cast<TzOffsetSource>(src);
+        }
+    }
+
+    // Nothing resolved yet: fall back to whatever manual offset is stored
+    // rather than silently showing UTC.
+    return TZ_OFFSET_MANUAL;
+}
 
 /**
  * @brief Resolve the offset from UTC to apply, in seconds
@@ -50,46 +73,100 @@ bool autoOffsetKnown = false;
  * @return Offset in seconds
  */
 auto resolveOffsetSeconds() -> int32_t {
-    const TimeSettings& cfg = configManager.settings.time;
+    const TzOffsetSource src = winningSource();
 
-    if (cfg.tz_mode == "manual") {
-        return static_cast<int32_t>(cfg.utc_offset_min) * SECONDS_PER_MINUTE;
+    if (src == TZ_OFFSET_MANUAL) {
+        return static_cast<int32_t>(configManager.settings.time.utc_offset_min) * SECONDS_PER_MINUTE;
     }
 
-    if (autoOffsetKnown) {
-        return autoOffsetSeconds;
+    return sourceSeconds.at(src);
+}
+
+/**
+ * @brief Keep a resolved offset across reboots
+ *
+ * Writing config.json costs a flash erase, so this only persists when the
+ * value actually moved - a steady device writes once, and again at each DST
+ * transition.
+ *
+ * @param offsetMinutes Offset from UTC in minutes
+ *
+ * @return void
+ */
+void cacheOffsetMinutes(int16_t offsetMinutes) {
+    TimeSettings& cfg = configManager.settings.time;
+
+    sourceSeconds.at(TZ_OFFSET_CACHED) = static_cast<int32_t>(offsetMinutes) * SECONDS_PER_MINUTE;
+    sourceKnown.at(TZ_OFFSET_CACHED) = true;
+
+    if (cfg.auto_offset_min == offsetMinutes) {
+        return;
     }
 
-    // No weather fix yet: fall back to whatever manual offset is stored rather
-    // than silently showing UTC.
-    return static_cast<int32_t>(cfg.utc_offset_min) * SECONDS_PER_MINUTE;
+    cfg.auto_offset_min = offsetMinutes;
+    configManager.save();
 }
 
 }  // namespace
 
 /**
- * @brief Record the UTC offset reported by the weather provider
+ * @brief Record an offset resolved from one of the automatic sources
  *
+ * @param source Which source reported it
  * @param offsetSeconds Offset from UTC in seconds
  *
  * @return void
  */
-void TimeService::setAutoOffsetSeconds(int32_t offsetSeconds) {
-    autoOffsetSeconds = offsetSeconds;
-    autoOffsetKnown = true;
+void TimeService::setOffsetSeconds(TzOffsetSource source, int32_t offsetSeconds) {
+    if (source == TZ_OFFSET_MANUAL) {
+        return;
+    }
+
+    sourceSeconds.at(source) = offsetSeconds;
+    sourceKnown.at(source) = true;
+
+    if (source != TZ_OFFSET_CACHED) {
+        cacheOffsetMinutes(static_cast<int16_t>(offsetSeconds / SECONDS_PER_MINUTE));
+    }
 }
 
 /**
- * @brief Forget the weather-provided UTC offset
+ * @brief Forget the offset from one source
  *
- * Called when a fetch succeeds but the provider did not report an offset
- * (the keyless fallback never does), so a stale offset from an earlier
- * fetch does not keep being applied.
+ * Called when a lookup succeeds but carries no offset - the keyless weather
+ * feed never reports one - so a stale value from an earlier fetch does not
+ * keep being applied. Lower-precedence sources stay in place, which is what
+ * keeps a good IP lookup alive across a keyless weather refresh.
+ *
+ * @param source Which source to forget
  *
  * @return void
  */
-void TimeService::clearAutoOffset() {
-    autoOffsetKnown = false;
+void TimeService::clearOffsetSource(TzOffsetSource source) {
+    if (source == TZ_OFFSET_MANUAL) {
+        return;
+    }
+
+    sourceKnown.at(source) = false;
+}
+
+/**
+ * @brief Seed the cached slot from config at boot
+ *
+ * Without this the clock shows UTC from boot until the first successful
+ * lookup, which on a slow join is several seconds of visibly wrong time.
+ *
+ * @return void
+ */
+void TimeService::restoreCachedOffset() {
+    const int16_t cached = configManager.settings.time.auto_offset_min;
+
+    if (cached == 0) {
+        return;
+    }
+
+    sourceSeconds.at(TZ_OFFSET_CACHED) = static_cast<int32_t>(cached) * SECONDS_PER_MINUTE;
+    sourceKnown.at(TZ_OFFSET_CACHED) = true;
 }
 
 /**
@@ -99,6 +176,34 @@ void TimeService::clearAutoOffset() {
  */
 auto TimeService::offsetMinutes() -> int16_t {
     return static_cast<int16_t>(resolveOffsetSeconds() / SECONDS_PER_MINUTE);
+}
+
+/**
+ * @brief Which source the applied offset came from
+ *
+ * @return The winning source
+ */
+auto TimeService::activeSource() -> TzOffsetSource { return winningSource(); }
+
+/**
+ * @brief Stable identifier for a source, for the API and the web UI
+ *
+ * @param source The source
+ *
+ * @return A short lowercase name
+ */
+auto TimeService::sourceLabel(TzOffsetSource source) -> const char* {
+    switch (source) {
+        case TZ_OFFSET_WEATHER:
+            return "weather";
+        case TZ_OFFSET_IP:
+            return "ip";
+        case TZ_OFFSET_CACHED:
+            return "cached";
+        case TZ_OFFSET_MANUAL:
+        default:
+            return "manual";
+    }
 }
 
 /**

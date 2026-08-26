@@ -248,8 +248,9 @@ function timePage() {
       font: 0,
       ntp_server: "",
     },
-    autoAvailable: false,
+    offsetSource: "manual",
     effectiveOffset: 0,
+    tzLookupStatus: "",
     tzStatus: "",
     colorStatus: "",
     formatStatus: "",
@@ -268,10 +269,36 @@ function timePage() {
       try {
         const cfg = await getConfig("/api/v1/time/config");
         Object.assign(this.cfg, cfg);
-        this.autoAvailable = !!cfg.auto_offset_available;
+        this.offsetSource = cfg.offset_source || "manual";
         this.effectiveOffset = cfg.effective_offset_min || 0;
+        this.tzLookupStatus = cfg.tz_status || "";
       } catch (e) {
         /* defaults */
+      }
+    },
+
+    // The offset select speaks minutes; ±HH:MM keeps the 45-minute zones
+    // honest, where dividing by 60 renders UTC+05:45 as "+5.8 h".
+    offsetLabel() {
+      const total = Number(this.effectiveOffset) || 0;
+      const abs = Math.abs(total);
+      const hours = String(Math.floor(abs / 60)).padStart(2, "0");
+      const minutes = String(abs % 60).padStart(2, "0");
+      return (total < 0 ? "-" : "+") + hours + ":" + minutes;
+    },
+
+    sourceNote() {
+      switch (this.offsetSource) {
+        case "weather":
+          return "from your city, via OpenWeatherMap";
+        case "ip":
+          return "from a lookup of this device's public IP";
+        case "cached":
+          return "the last offset resolved automatically";
+        default:
+          return this.cfg.tz_mode === "auto"
+            ? "the manual offset, until an automatic lookup succeeds"
+            : "the manual offset";
       }
     },
 

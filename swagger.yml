@@ -967,6 +967,8 @@ paths:
               properties:
                 tz_mode:
                   type: "string"
+                utc_offset_min:
+                  type: "integer"
                 format12h:
                   type: "boolean"
                 date_format:
