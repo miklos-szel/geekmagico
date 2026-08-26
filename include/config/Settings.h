@@ -65,10 +65,10 @@ struct WeatherSettings {
     std::string wind = "kmh";      // ms | kmh | mph
     std::string temp = "c";        // c | f
     std::string pressure = "hpa";  // hpa | inhg | mmhg
-    // Weather screen icon: empty draws the built-in vector glyphs, "auto"
-    // plays the bundled animation matching the condition, anything else is a
+    // Weather screen icon: "auto" plays the bundled animation matching the
+    // condition, empty draws the built-in vector glyphs, anything else is a
     // filename in /gif played for every condition.
-    std::string gif;
+    std::string gif = "auto";
 };
 
 /**
@@ -81,7 +81,7 @@ struct TimeSettings {
     int16_t utc_offset_min = 0;
     int16_t auto_offset_min = 0;  // Last offset resolved in auto mode, kept across reboots
     uint16_t hour_color = 0xFFFF;
-    uint16_t minute_color = 0xFD20;
+    uint16_t minute_color = 0xFFFF;
     uint16_t second_color = 0xFFFF;
     bool format12h = false;
     std::string date_format = "YYYY-MM-DD";
