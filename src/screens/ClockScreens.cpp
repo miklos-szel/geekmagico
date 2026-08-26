@@ -67,7 +67,13 @@ constexpr int16_t SEG_ROW_Y = 74;
 void TimeStyleScreen::enter() {
     DisplayManager::getGfx()->fillScreen(BG_COLOR);
 
+    // fillScreen wiped the panel, so *every* cache has to go with it. A cache
+    // left holding its old value makes cachedText() skip the repaint, and the
+    // field stays blank until that value happens to change -- which for the
+    // minutes is up to a minute after switching style or font.
     _timeCache = "";
+    _minuteCache = "";
+    _secondCache = "";
     _dateCache = "";
     _extraCache = "";
     _lastColonVisible = true;
@@ -143,9 +149,14 @@ void TimeStyleScreen::drawBitmap(const LocalTime& local) {
     }
 
     // The colon is repainted only when its state flips, so blinking costs one
-    // small rectangle per second rather than a full redraw.
-    if (colonOn != _lastColonVisible || _timeCache.length() == 0) {
+    // small rectangle per second rather than a full redraw. _colonPainted is
+    // what makes the first paint after enter() happen -- testing _timeCache
+    // here cannot, because the hour's cachedText() above has already filled it.
+    // With blink off colonVisible() is always true, so that stale test meant
+    // the colon was never drawn at all.
+    if (colonOn != _lastColonVisible || !_colonPainted) {
         _lastColonVisible = colonOn;
+        _colonPainted = true;
 
         gfx->setTextSize(size);
         gfx->setTextColor(colonOn ? cfg.minute_color : BG_COLOR, BG_COLOR);

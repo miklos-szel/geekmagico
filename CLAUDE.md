@@ -140,12 +140,12 @@ A render that comes out as a single frame is a failure *unless the source has no
 properties* (`not-available` genuinely does not). The script checks the source rather than
 special-casing the name, so never "fix" that check by hardcoding an exception.
 
-`"auto"` is **not** the shipped default (`WeatherSettings::gif` is empty), even though the icons
-ship in `littlefs.bin`. `AnimatedGIF` measures **24,172 bytes** on this build, and `playGifAt()`
-allocates it for as long as the screen is up — making auto the default would put that allocation
-on the default screen of every fresh install, against a ~31KB heap. Compare the JPEGDEC note
-above: a ~17.5KB contiguous allocation already fails here. Users opt in from the Weather page.
-Don't flip the default without measuring free heap on hardware first.
+`"auto"` **is** the shipped default, since the icons ship in `littlefs.bin` anyway. Know what
+that costs: `AnimatedGIF` measures **24,172 bytes** on this build and `playGifAt()` holds it for
+as long as the screen is up, so the weather clock now carries that allocation as its normal
+state. It was verified working on hardware before the default was flipped — but compare the
+JPEGDEC note above, where a ~17.5KB contiguous allocation *fails*, and treat the free-heap line
+in `src/main.cpp` as the tripwire if anything here grows.
 
 The icons are **deliberately deletable** — they list, Set and delete like any uploaded file so
 users can reclaim the space. `startConditionGif()` in `src/screens/WeatherScreens.cpp` treats a
