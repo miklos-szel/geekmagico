@@ -65,10 +65,13 @@ struct WeatherSettings {
     std::string wind = "kmh";      // ms | kmh | mph
     std::string temp = "c";        // c | f
     std::string pressure = "hpa";  // hpa | inhg | mmhg
-    // Weather screen icon: "auto" plays the bundled animation matching the
-    // condition, empty draws the built-in vector glyphs, anything else is a
+    // Weather screen icon: empty draws the built-in vector glyphs, "auto"
+    // plays the bundled animation matching the condition, anything else is a
     // filename in /gif played for every condition.
-    std::string gif = "auto";
+    //
+    // Defaults to the glyphs on purpose. The GIF decoder needs ~24KB in one
+    // block and this device idles near 20KB free, so "auto" is opt-in.
+    std::string gif;
 };
 
 /**

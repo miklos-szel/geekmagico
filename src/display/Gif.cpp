@@ -22,9 +22,15 @@
 
 #include "display/Gif.h"
 #include "display/DisplayManager.h"
+#include "Logger.h"
+#include <new>
 #include <Arduino_GFX_Library.h>
 #include <array>
 static constexpr uint32_t GIF_MAX_MS_PER_FILE = 20000U;
+// Headroom left for WiFi and the web server after the decoder is allocated.
+// Winning the allocation only to starve the rest of the system is no better
+// than losing it.
+static constexpr uint32_t GIF_HEAP_SLACK = 8192U;
 static constexpr uint8_t GIF_TARGET_FPS = 30U;
 static constexpr uint32_t GIF_FRAME_MS = 1000U / GIF_TARGET_FPS;
 
@@ -56,9 +62,21 @@ Gif::~Gif() {
  */
 auto Gif::begin() -> bool {
     if (m_gif == nullptr) {
-        m_gif = new AnimatedGIF();
+        // AnimatedGIF is ~24KB in a single block and this device idles near
+        // 20KB free, so this allocation genuinely fails in the field. It must
+        // fail *softly*: plain `new` on this core calls __unhandled_exception
+        // ("OOM") rather than returning nullptr, which panics into a reboot and
+        // -- three of those inside BOOT_STABLE_MS -- lands the user in rescue
+        // mode. std::nothrow is what makes the null check below reachable.
+        if (EspClass::getFreeHeap() < (sizeof(AnimatedGIF) + GIF_HEAP_SLACK)) {
+            Logger::warn("Not enough heap for the GIF decoder", "Gif");
+            return false;
+        }
+
+        m_gif = new (std::nothrow) AnimatedGIF();
 
         if (m_gif == nullptr) {
+            Logger::warn("GIF decoder allocation failed", "Gif");
             return false;
         }
     }

@@ -353,7 +353,7 @@ def state_defaults(h: APIHandler, key: str, defaults: dict) -> dict:
 
 WEATHER_DEFAULTS = {
     "city": "vienna", "interval_min": 20, "wind": "kmh", "temp": "c",
-    "pressure": "hpa", "gif": "auto", "api_key": "", "forecast_key": "",
+    "pressure": "hpa", "gif": "", "api_key": "", "forecast_key": "",
 }
 TIME_DEFAULTS = {
     "tz_mode": "auto", "utc_offset_min": 120, "auto_offset_min": 120, "hour_color": "#FFFFFF",

@@ -150,7 +150,7 @@ function weatherPage() {
       wind: "ms",
       temp: "c",
       pressure: "hpa",
-      gif: "auto",
+      gif: "",
     },
     apiKey: "",
     forecastKey: "",
