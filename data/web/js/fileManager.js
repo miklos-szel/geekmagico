@@ -265,8 +265,10 @@ function fileManager(dir) {
         });
         const data = await res.json().catch(() => ({}));
         this.status = data.message || (res.ok ? "Selected" : "Failed");
+        return res.ok;
       } catch (e) {
         this.status = "Failed: " + e;
+        return false;
       }
     },
   };

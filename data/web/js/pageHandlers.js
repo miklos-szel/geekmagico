@@ -150,6 +150,7 @@ function weatherPage() {
       wind: "ms",
       temp: "c",
       pressure: "hpa",
+      gif: "",
     },
     apiKey: "",
     forecastKey: "",
@@ -161,6 +162,7 @@ function weatherPage() {
     intervalStatus: "",
     keyStatus: "",
     forecastKeyStatus: "",
+    iconStatus: "",
 
     async init() {
       try {
@@ -171,6 +173,7 @@ function weatherPage() {
           wind: cfg.wind || "ms",
           temp: cfg.temp || "c",
           pressure: cfg.pressure || "hpa",
+          gif: cfg.gif || "",
         };
         this.apiKeySet = !!cfg.api_key_set;
         this.forecastKeySet = !!cfg.forecast_key_set;
@@ -204,6 +207,26 @@ function weatherPage() {
       });
       this.unitStatus = r.message;
       await this.refreshCurrent();
+    },
+
+    // "auto" plays the bundled animation matching the conditions, "" draws the
+    // built-in simple icons, anything else is a filename from the list below.
+    get iconMode() {
+      if (this.cfg.gif === "auto") return "auto";
+      return this.cfg.gif ? "custom" : "simple";
+    },
+
+    async setIconMode(mode) {
+      // "custom" is not selectable here -- it is what pressing SET on a file
+      // does, so offering it as a radio would have nothing to point at.
+      const gif = mode === "auto" ? "auto" : "";
+      const r = await postConfig("/api/v1/weather/config", { gif });
+      // Only follow the device: on a 401 or a save failure the radio must not
+      // move, or the page claims a mode the device never took.
+      if (r.ok) {
+        this.cfg.gif = gif;
+      }
+      this.iconStatus = r.message;
     },
 
     async saveInterval() {
@@ -243,7 +266,7 @@ function timePage() {
       minute_color: "#FFA500",
       second_color: "#FFFFFF",
       format12h: false,
-      date_format: "DD/MM/YYYY",
+      date_format: "YYYY-MM-DD",
       colon_blink: false,
       font: 0,
       ntp_server: "",

@@ -704,8 +704,8 @@ auto DisplayManager::playGifFullScreen(const String& path, uint32_t timeMs) -> b
  * @param path Path to the GIF on LittleFS
  * @param xPos Left edge of the box
  * @param yPos Top edge of the box
- * @param width Box width, cleared before playback starts
- * @param height Box height, cleared before playback starts
+ * @param width Box width; the animation is centred in it and clipped to it
+ * @param height Box height; the animation is centred in it and clipped to it
  *
  * @return true when playback started
  */
@@ -726,7 +726,7 @@ auto DisplayManager::playGifAt(const String& path, int16_t xPos, int16_t yPos, i
 
     g_lcd.fillRect(xPos, yPos, width, height, LCD_BLACK);
 
-    g_gif->setPlacement(xPos, yPos);
+    g_gif->setPlacement(xPos, yPos, width, height);
     g_gif->setLoopEnabled(true);
 
     return g_gif->playOne(path);

@@ -858,8 +858,18 @@ paths:
                   type: "string"
                 api_key:
                   type: "string"
+                forecast_key:
+                  type: "string"
                 interval_min:
                   type: "integer"
+                wind:
+                  type: "string"
+                temp:
+                  type: "string"
+                pressure:
+                  type: "string"
+                gif:
+                  type: "string"
               required: []
         required: true
   /api/v1/weather/current:

@@ -117,6 +117,55 @@ differs. Full-screen redraws on a 40MHz SPI bus visibly flicker and starve the l
 The ST7789 needs **SPI mode 3** and a vendor init sequence; CS is tied to GND on this board.
 Don't "simplify" `lcdRunVendorInit()` — see `docs/hardware.md` for why each step is there.
 
+## Weather icons
+
+`data/gif/wx-*.gif` is **generated**, never hand-edited or hand-optimised. It comes from
+`scripts/build-weather-gifs.sh`, which renders [Meteocons](https://github.com/basmilius/meteocons)
+Lottie sources (MIT, `licenses/meteocons-LICENSE`) to 80x80 GIFs.
+
+The script enforces a **20KB per file / 200KB total** budget and fails the build rather than
+warning. That is not neatness: the filesystem is 2MB, the web UI already spends ~248KB, and the
+rest is what users have for their own pictures. It also asserts every file is exactly 80x80 and
+loops inside `GIF_MAX_MS_PER_FILE`, since a slower single pass is an icon that stops dead and
+never restarts.
+
+Two things that bit during the first build and will bite again:
+
+- cairosvg resolves lottie layer **masks** to fully transparent, so a masked layer vanishes
+  silently — `partly-cloudy-day` renders as a bare cloud with no sun. The script strips masks
+  before rendering. Only that one icon carries any, and its masks were redundant anyway.
+- python-lottie ignores `--fps`. Frame rate is dialled in with `--gif-skip-frames`.
+
+A render that comes out as a single frame is a failure *unless the source has no animated
+properties* (`not-available` genuinely does not). The script checks the source rather than
+special-casing the name, so never "fix" that check by hardcoding an exception.
+
+`"auto"` is **not** the shipped default (`WeatherSettings::gif` is empty), even though the icons
+ship in `littlefs.bin`. `AnimatedGIF` measures **24,172 bytes** on this build, and `playGifAt()`
+allocates it for as long as the screen is up — making auto the default would put that allocation
+on the default screen of every fresh install, against a ~31KB heap. Compare the JPEGDEC note
+above: a ~17.5KB contiguous allocation already fails here. Users opt in from the Weather page.
+Don't flip the default without measuring free heap on hardware first.
+
+The icons are **deliberately deletable** — they list, Set and delete like any uploaded file so
+users can reclaim the space. `startConditionGif()` in `src/screens/WeatherScreens.cpp` treats a
+missing file as normal and falls back to the vector glyph for that condition alone. Note
+`FilesApi.cpp` only clears `weather.gif` on an exact filename match, which is what keeps the
+`"auto"` sentinel alive when an individual icon is deleted; don't "improve" that into a
+prefix match.
+
+## Screen geometry
+
+`weatherGlyph()` branches all fill `center +- 3*unit`. Holding that box is what stops the icon
+appearing to jump when conditions change: the slot is repainted, not re-laid-out, so a branch
+that draws a different size reads to users as a misaligned icon.
+
+On the weather clock, the condition label and the humidity/wind line are **centred on the full
+panel width**, not right-aligned beside the icon. They do not fit beside it — `"Partly cloudy"`
+is 156px and `"H100%  100.0km/h"` is 192px against an icon box ending at x=88 — and
+right-aligning either one puts its left edge inside the icon. Any new field on that screen
+needs the same check: `len * 6 * size` against the space actually left.
+
 ## API and docs
 
 `swagger.yml` is **generated**, never hand-edited. Handlers carry `// @openapi` comments that

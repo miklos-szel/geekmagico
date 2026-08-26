@@ -28,6 +28,8 @@
 #include <LittleFS.h>
 #include <array>
 
+#include "config/ConfigManager.h"
+
 class Gif {
    public:
     Gif();
@@ -41,8 +43,9 @@ class Gif {
     auto isPlaying() const -> bool;
     auto setLoopEnabled(bool enabled) -> void;
 
-    // Place the animation at an explicit top-left instead of centring it.
-    auto setPlacement(int16_t xPos, int16_t yPos) -> void;
+    // Confine the animation to a box: centred inside it and clipped to it,
+    // instead of centred on the panel.
+    auto setPlacement(int16_t xPos, int16_t yPos, int16_t width, int16_t height) -> void;
     auto clearPlacement() -> void;
 
    private:
@@ -70,6 +73,15 @@ class Gif {
     bool m_forcedPlacement = false;
     int16_t m_forcedX = 0;
     int16_t m_forcedY = 0;
+    int16_t m_boxW = 0;
+    int16_t m_boxH = 0;
+
+    // Drawing is clipped to this rectangle. It is the whole panel unless a
+    // placement box is set, so full-screen playback is unaffected.
+    int16_t m_clipX0 = 0;
+    int16_t m_clipY0 = 0;
+    int16_t m_clipX1 = LCD_W;
+    int16_t m_clipY1 = LCD_H;
 
     String m_currentPath;
 

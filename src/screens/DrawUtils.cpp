@@ -297,14 +297,29 @@ void DrawUtils::weatherGlyph(int16_t xPos, int16_t yPos, int16_t size, uint8_t c
     constexpr uint16_t SNOW = 0xFFFF;
     constexpr uint16_t BOLT = 0xFFE0;
 
+    // Every branch below fills centerX/centerY +- 3*unit. Holding that box is
+    // what stops the icon appearing to jump when the condition changes -- the
+    // slot is repainted, not re-laid-out, so an off-centre branch reads as a
+    // misaligned icon rather than as a different drawing.
+
+    // A cloud body, so the precipitation branches do not each re-derive one.
+    // Drawn centred on `cloudY`, spanning +-3*unit across and 2.5*unit down.
+    auto cloudAt = [&](int16_t cloudY) {
+        gfx->fillCircle(centerX - unit, cloudY, unit * 2, CLOUD);
+        gfx->fillCircle(centerX + ((unit * 3) / 2), cloudY, (unit * 3) / 2, CLOUD);
+        gfx->fillRect(centerX - (unit * 3), cloudY, unit * 6, unit * 2, CLOUD);
+    };
+
     switch (condition) {
         case WX_CLEAR:
             gfx->fillCircle(centerX, centerY, unit * 2, SUN);
             // Ray offsets are precomputed rather than derived with sinf/cosf:
             // pulling libm in for eight fixed points costs real DRAM here.
+            // Scaled so the ray centres land at 2.5*unit and their radius
+            // carries the glyph out to exactly 3*unit.
             for (const auto& ray : SUN_RAYS) {
-                gfx->fillCircle(static_cast<int16_t>(centerX + ((ray.dx * unit * 3) / 10)),
-                                static_cast<int16_t>(centerY + ((ray.dy * unit * 3) / 10)), unit / 2, SUN);
+                gfx->fillCircle(static_cast<int16_t>(centerX + ((ray.dx * unit) / 4)),
+                                static_cast<int16_t>(centerY + ((ray.dy * unit) / 4)), unit / 2, SUN);
             }
             break;
 
@@ -316,13 +331,18 @@ void DrawUtils::weatherGlyph(int16_t xPos, int16_t yPos, int16_t size, uint8_t c
             break;
 
         case WX_CLOUDY:
+            // Sits half a unit high so the body, which hangs downward from the
+            // circles, ends up centred rather than top-heavy.
+            cloudAt(centerY - (unit / 2));
+            gfx->fillRect(centerX - (unit * 3), centerY - (unit / 2), unit * 6, unit * 3, CLOUD);
+            break;
+
         case WX_FOG:
-            gfx->fillCircle(centerX - unit, centerY, unit * 2, CLOUD);
-            gfx->fillCircle(centerX + unit + (unit / 2), centerY, unit + (unit / 2), CLOUD);
-            gfx->fillRect(centerX - (unit * 3), centerY, unit * 6, unit * 2, CLOUD);
-            if (condition == WX_FOG) {
-                gfx->fillRect(centerX - (unit * 3), centerY + (unit * 3), unit * 6, unit / 2, CLOUD);
-            }
+            // Cloud lifted to make room for the bars, which carry the glyph
+            // back down to 3*unit so it balances the taller branches.
+            cloudAt(centerY - unit);
+            gfx->fillRect(centerX - ((unit * 5) / 2), centerY + ((unit * 3) / 2), unit * 5, unit / 2, CLOUD);
+            gfx->fillRect(centerX - (unit * 2), centerY + ((unit * 5) / 2), unit * 4, unit / 2, CLOUD);
             break;
 
         case WX_DRIZZLE:
@@ -330,21 +350,32 @@ void DrawUtils::weatherGlyph(int16_t xPos, int16_t yPos, int16_t size, uint8_t c
         case WX_SNOW:
         case WX_SLEET:
         case WX_THUNDER: {
-            gfx->fillCircle(centerX - unit, centerY - unit, unit * 2, CLOUD);
-            gfx->fillCircle(centerX + unit + (unit / 2), centerY - unit, unit + (unit / 2), CLOUD);
-            gfx->fillRect(centerX - (unit * 3), centerY - unit, unit * 6, unit * 2, CLOUD);
+            cloudAt(centerY - unit);
 
             if (condition == WX_THUNDER) {
-                gfx->fillTriangle(centerX, centerY + unit, centerX + unit, centerY + (unit * 2), centerX - unit, centerY + (unit * 3), BOLT);
+                // Two mirrored triangles, so it reads as a bolt rather than as
+                // the single lopsided wedge this used to draw.
+                gfx->fillTriangle(centerX + unit, centerY + unit, centerX - unit, centerY + (unit * 2), centerX,
+                                  centerY + (unit * 2), BOLT);
+                gfx->fillTriangle(centerX + unit, centerY + (unit * 2), centerX - unit, centerY + (unit * 3), centerX,
+                                  centerY + (unit * 2), BOLT);
             } else if (condition == WX_SNOW) {
                 for (int16_t i = -1; i <= 1; ++i) {
                     gfx->fillCircle(centerX + (i * unit * 2), centerY + (unit * 2), unit / 2, SNOW);
                 }
             } else {
+                // Centre the group on centerX. fillRect anchors at its left
+                // edge, so both the drop spacing and the drop width have to be
+                // taken out of the starting offset -- missing that is what put
+                // drizzle's two drops entirely left of centre.
                 const int16_t drops = (condition == WX_DRIZZLE) ? 2 : 3;
+                const int16_t spacing = unit * 2;
+                const auto groupW = static_cast<int16_t>(((drops - 1) * spacing) + (unit / 2));
+                const auto firstX = static_cast<int16_t>(centerX - (groupW / 2));
+
                 for (int16_t i = 0; i < drops; ++i) {
-                    const int16_t dropX = centerX + ((i - 1) * unit * 2);
-                    gfx->fillRect(dropX, centerY + unit, unit / 2, unit * 2, RAIN);
+                    gfx->fillRect(static_cast<int16_t>(firstX + (i * spacing)), centerY + unit, unit / 2, unit * 2,
+                                  RAIN);
                 }
             }
             break;
