@@ -89,14 +89,13 @@
               <option value="840">UTC+14:00</option>
             </select>
           </div>
-          <p class="gm-warn" x-show="cfg.tz_mode === 'auto' && !autoAvailable">
-            Automatic timezone needs an OpenWeatherMap API key — the keyless
-            weather service does not report a UTC offset. Until a key is set on
-            the Weather page, the manual offset above is used.
+          <p class="gm-warn" x-show="cfg.tz_mode === 'auto' && offsetSource === 'manual'">
+            The automatic lookup has not resolved an offset yet, so the manual
+            offset above is being used. <span x-text="tzLookupStatus"></span>
           </p>
           <p class="gm-hint">
-            Currently applying
-            <span x-text="(effectiveOffset >= 0 ? '+' : '') + (effectiveOffset / 60).toFixed(1) + ' h'"></span>
+            Currently applying <strong x-text="offsetLabel()"></strong> —
+            <span x-text="sourceNote()"></span>
           </p>
           <button class="gm-save" @click="saveTz()">Save</button>
           <p class="gm-status" x-text="tzStatus"></p>

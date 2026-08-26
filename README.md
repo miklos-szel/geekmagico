@@ -24,7 +24,7 @@ A five-tab web interface — **Network, Weather, Time, Pictures, Settings** — 
 | | |
 |---|---|
 | **Weather** | Current conditions and a multi-day forecast. Works with no API key at all; set an OpenWeatherMap key for higher refresh rates. |
-| **Clock** | Three time styles plus a simple weather clock. Per-digit colours, 12/24h, date format, colon blink, selectable font. |
+| **Clock** | Three time styles plus a simple weather clock. Per-digit colours, 12/24h, date format, colon blink, selectable font. The timezone resolves itself, with a manual UTC offset as fallback. |
 | **Photo album** | JPG and GIF slideshow from onboard storage, in order or shuffled, with **folder upload** from the browser. |
 | **Themes** | Seven screens, switchable by hand or on a timer. |
 | **Display** | Brightness control and a scheduled night mode. |

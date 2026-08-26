@@ -33,6 +33,14 @@
 static constexpr uint8_t THEME_COUNT = 7;
 
 /**
+ * @brief Accepted range for a UTC offset, in minutes (UTC-12:00 .. UTC+14:00)
+ *
+ * Shared so the config loader and the API validate against the same bounds.
+ */
+static constexpr int16_t UTC_OFFSET_MIN_MINUTES = -720;
+static constexpr int16_t UTC_OFFSET_MAX_MINUTES = 840;
+
+/**
  * @brief Display theme identifiers, ordered as the Settings page lists them
  */
 enum ThemeId : uint8_t {
@@ -66,8 +74,9 @@ struct WeatherSettings {
  * Colors are RGB565 so they can go straight to the panel.
  */
 struct TimeSettings {
-    std::string tz_mode = "auto";  // auto (from weather provider) | manual
+    std::string tz_mode = "auto";  // auto (resolved online) | manual
     int16_t utc_offset_min = 0;
+    int16_t auto_offset_min = 0;  // Last offset resolved in auto mode, kept across reboots
     uint16_t hour_color = 0xFFFF;
     uint16_t minute_color = 0xFD20;
     uint16_t second_color = 0xFFFF;
@@ -82,8 +91,8 @@ struct TimeSettings {
  */
 struct PictureSettings {
     bool auto_display = true;
-    bool shuffle = false;  // Show the album in a random order
-    uint16_t interval_s = 5;
+    bool shuffle = true;  // Show the album in a random order
+    uint16_t interval_s = 30;
     std::string current;   // Pinned file when auto_display is off
 };
 
@@ -96,13 +105,13 @@ struct PictureSettings {
 struct DisplaySettings {
     uint8_t theme = THEME_WEATHER_CLOCK;
     bool auto_switch = false;
-    uint16_t auto_switch_interval_s = 10;
+    uint16_t auto_switch_interval_s = 30;
     uint8_t auto_switch_mask = 0;  // One bit per ThemeId
     uint8_t brightness = 60;       // 0-100
-    bool night_mode = false;
+    bool night_mode = true;
     uint16_t night_start = 22 * 60;
     uint16_t night_end = 7 * 60;
-    uint8_t night_brightness = 20;  // 0-100
+    uint8_t night_brightness = 15;  // 0-100
 };
 
 /**

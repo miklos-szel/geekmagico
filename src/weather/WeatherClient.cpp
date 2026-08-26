@@ -22,14 +22,13 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
-#include <WiFiClient.h>
 #include <Logger.h>
 #include <algorithm>
 #include <cstring>
 
 #include "weather/WeatherClient.h"
+#include "net/HttpJson.h"
 #include "config/ConfigManager.h"
 #include "time/TimeService.h"
 #include "wireless/WiFiManager.h"
@@ -45,11 +44,11 @@ namespace {
 
 constexpr const char* TAG = "Weather";
 
-constexpr uint16_t HTTP_TIMEOUT_MS = 8000;
 constexpr uint32_t MS_PER_MINUTE = 60000UL;
 constexpr uint16_t MIN_INTERVAL_KEYLESS_MIN = 30;
 constexpr uint16_t MIN_INTERVAL_KEYED_MIN = 1;
 constexpr uint32_t RETRY_DELAY_MS = 60000UL;
+constexpr int32_t TZ_OFFSET_ABSENT = INT32_MIN;
 
 constexpr float MS_TO_KMH = 3.6F;
 constexpr float MS_TO_MPH = 2.236936F;
@@ -213,10 +212,7 @@ auto effectiveIntervalMs() -> uint32_t {
 }
 
 /**
- * @brief Run an HTTP GET and hand the stream to a parser
- *
- * The response body can be far larger than free heap, so parsing always runs
- * against the stream with a filter rather than buffering.
+ * @brief Run a filtered GET and record the outcome for the status endpoint
  *
  * @param url The URL to fetch
  * @param filter Filter describing the fields to keep
@@ -225,47 +221,7 @@ auto effectiveIntervalMs() -> uint32_t {
  * @return true when the request and parse both succeeded
  */
 auto fetchFiltered(const String& url, JsonDocument& filter, JsonDocument& doc) -> bool {
-    if (!WiFiManager::isConnected()) {
-        statusMessage = "network unavailable";
-        return false;
-    }
-
-    WiFiClient client;
-    HTTPClient http;
-
-    http.setTimeout(HTTP_TIMEOUT_MS);
-    http.setReuse(false);
-    http.useHTTP10(true);
-
-    if (!http.begin(client, url)) {
-        statusMessage = "request setup failed";
-        return false;
-    }
-
-    EspClass::wdtFeed();
-
-    const int status = http.GET();
-    if (status != HTTP_CODE_OK) {
-        statusMessage = String("HTTP ") + String(status);
-        http.end();
-
-        return false;
-    }
-
-    EspClass::wdtFeed();
-
-    const DeserializationError error = deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
-
-    http.end();
-    EspClass::wdtFeed();
-    yield();
-
-    if (error) {
-        statusMessage = String("parse error: ") + error.c_str();
-        return false;
-    }
-
-    return true;
+    return HttpJson::fetchFiltered(url, filter, doc, statusMessage);
 }
 
 /**
@@ -311,8 +267,12 @@ auto fetchOwmNow(WeatherNow& out) -> bool {
 
     // OpenWeatherMap reports the city's UTC offset, which is what makes the
     // "auto" timezone mode possible.
-    if (doc["timezone"].is<int32_t>()) {
-        out.tzOffsetSeconds = doc["timezone"].as<int32_t>();
+    // Sentinel rather than is<int32_t>(): the type test is strict about how
+    // the number was parsed, and a missed offset silently leaves auto mode on
+    // whatever fallback is in place.
+    const int32_t tzOffset = doc["timezone"] | TZ_OFFSET_ABSENT;
+    if (tzOffset != TZ_OFFSET_ABSENT) {
+        out.tzOffsetSeconds = tzOffset;
         out.tzOffsetKnown = true;
     }
 
@@ -436,9 +396,9 @@ auto WeatherClient::refreshNow() -> bool {
     statusMessage = "ok";
 
     if (currentWeather.tzOffsetKnown) {
-        TimeService::setAutoOffsetSeconds(currentWeather.tzOffsetSeconds);
+        TimeService::setOffsetSeconds(TZ_OFFSET_WEATHER, currentWeather.tzOffsetSeconds);
     } else {
-        TimeService::clearAutoOffset();
+        TimeService::clearOffsetSource(TZ_OFFSET_WEATHER);
     }
 
     Logger::info((String("Weather updated: ") + String(currentWeather.tempC, 1) + "C " +

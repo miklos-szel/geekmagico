@@ -82,8 +82,24 @@ Every outbound request uses **plain HTTP**. BearSSL costs ~22KB of heap during a
 which this device does not have to spare while also running a web server.
 
 This is why weather uses OpenWeatherMap over `http://` and a keyless fallback that is also
-reachable over `http://`. If you need a new external service, check it serves plain HTTP
-before designing around it.
+reachable over `http://`, and why the timezone lookup uses ip-api.com, whose free tier is
+HTTP-only. If you need a new external service, check it serves plain HTTP before designing
+around it.
+
+All of them go through `HttpJson::fetchFiltered` (`src/net/HttpJson.cpp`) rather than each
+client setting up its own `HTTPClient`, so the streaming-parse and `wdtFeed()` contract is
+written once. Sharing it is worth a few hundred bytes of flash, not kilobytes — the linker
+already folds most of the duplication — but a second hand-rolled copy is a second place to
+get the watchdog wrong.
+
+## Timezone
+
+The clock is UTC end to end: `configTime(0, 0, ...)` never bakes in an offset, and
+`TimeService` shifts at render time. In `auto` mode the offset comes from the
+highest-precedence source that has one — OpenWeatherMap's city offset, then an ip-api
+lookup, then the value cached in `time.auto_offset_min`, then the manual `utc_offset_min`.
+Auto used to depend on OWM alone, which left every keyless install silently on UTC; keep
+a fallback chain in place if you touch `resolveOffsetSeconds()`.
 
 ## Watchdog
 

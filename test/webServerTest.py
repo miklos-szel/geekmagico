@@ -356,16 +356,16 @@ WEATHER_DEFAULTS = {
     "pressure": "hpa", "gif": "", "api_key": "", "forecast_key": "",
 }
 TIME_DEFAULTS = {
-    "tz_mode": "auto", "utc_offset_min": 120, "hour_color": "#FFFFFF",
+    "tz_mode": "auto", "utc_offset_min": 120, "auto_offset_min": 120, "hour_color": "#FFFFFF",
     "minute_color": "#FFA500", "second_color": "#FFFFFF", "format12h": False,
     "date_format": "DD/MM/YYYY", "colon_blink": False, "font": 0,
     "ntp_server": "",
 }
-PICTURE_DEFAULTS = {"auto_display": True, "shuffle": False, "interval_s": 5, "current": ""}
+PICTURE_DEFAULTS = {"auto_display": True, "shuffle": True, "interval_s": 30, "current": ""}
 DISPLAY_DEFAULTS = {
-    "theme": 0, "auto_switch": False, "auto_switch_interval_s": 10,
-    "auto_switch_mask": 0, "brightness": 60, "night_mode": False,
-    "night_start": "22:00", "night_end": "07:00", "night_brightness": 20,
+    "theme": 0, "auto_switch": False, "auto_switch_interval_s": 30,
+    "auto_switch_mask": 0, "brightness": 60, "night_mode": True,
+    "night_start": "22:00", "night_end": "07:00", "night_brightness": 15,
     "rotation": 0,
 }
 WEB_DEFAULTS = {
@@ -424,8 +424,14 @@ def time_config_get(h: APIHandler):
         return
     cfg = dict(state_defaults(h, "time", TIME_DEFAULTS))
     weather = state_defaults(h, "weather", WEATHER_DEFAULTS)
-    cfg["auto_offset_available"] = bool(weather.get("api_key"))
+    if cfg.get("tz_mode") == "manual":
+        cfg["offset_source"] = "manual"
+    elif weather.get("api_key"):
+        cfg["offset_source"] = "weather"
+    else:
+        cfg["offset_source"] = "ip"
     cfg["effective_offset_min"] = cfg.get("utc_offset_min", 0)
+    cfg["tz_status"] = "ok"
     h.json_response(cfg)
 
 

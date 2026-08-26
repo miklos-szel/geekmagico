@@ -248,8 +248,9 @@ function timePage() {
       font: 0,
       ntp_server: "",
     },
-    autoAvailable: false,
+    offsetSource: "manual",
     effectiveOffset: 0,
+    tzLookupStatus: "",
     tzStatus: "",
     colorStatus: "",
     formatStatus: "",
@@ -268,10 +269,36 @@ function timePage() {
       try {
         const cfg = await getConfig("/api/v1/time/config");
         Object.assign(this.cfg, cfg);
-        this.autoAvailable = !!cfg.auto_offset_available;
+        this.offsetSource = cfg.offset_source || "manual";
         this.effectiveOffset = cfg.effective_offset_min || 0;
+        this.tzLookupStatus = cfg.tz_status || "";
       } catch (e) {
         /* defaults */
+      }
+    },
+
+    // The offset select speaks minutes; ±HH:MM keeps the 45-minute zones
+    // honest, where dividing by 60 renders UTC+05:45 as "+5.8 h".
+    offsetLabel() {
+      const total = Number(this.effectiveOffset) || 0;
+      const abs = Math.abs(total);
+      const hours = String(Math.floor(abs / 60)).padStart(2, "0");
+      const minutes = String(abs % 60).padStart(2, "0");
+      return (total < 0 ? "-" : "+") + hours + ":" + minutes;
+    },
+
+    sourceNote() {
+      switch (this.offsetSource) {
+        case "weather":
+          return "from your city, via OpenWeatherMap";
+        case "ip":
+          return "from a lookup of this device's public IP";
+        case "cached":
+          return "the last offset resolved automatically";
+        default:
+          return this.cfg.tz_mode === "auto"
+            ? "the manual offset, until an automatic lookup succeeds"
+            : "the manual offset";
       }
     },
 
@@ -321,7 +348,7 @@ function timePage() {
 
 function picturesPage() {
   return {
-    cfg: { auto_display: true, shuffle: false, interval_s: 5 },
+    cfg: { auto_display: true, shuffle: true, interval_s: 30 },
     status: "",
 
     async init() {
@@ -329,7 +356,7 @@ function picturesPage() {
         const cfg = await getConfig("/api/v1/pictures/config");
         this.cfg.auto_display = !!cfg.auto_display;
         this.cfg.shuffle = !!cfg.shuffle;
-        this.cfg.interval_s = cfg.interval_s || 5;
+        this.cfg.interval_s = cfg.interval_s || 30;
       } catch (e) {
         /* defaults */
       }
@@ -351,13 +378,13 @@ function settingsPage() {
     cfg: {
       theme: 0,
       auto_switch: false,
-      auto_switch_interval_s: 10,
+      auto_switch_interval_s: 30,
       auto_switch_mask: 0,
       brightness: 60,
-      night_mode: false,
+      night_mode: true,
       night_start: "22:00",
       night_end: "07:00",
-      night_brightness: 20,
+      night_brightness: 15,
       rotation: 0,
     },
     themes: [],
