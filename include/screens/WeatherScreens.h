@@ -29,11 +29,7 @@
 #include "weather/WeatherClient.h"
 
 /**
- * @brief Clock with today's conditions and an 80x80 weather icon
- *
- * The icon slot has three modes, chosen by `weather.gif`: empty draws the
- * built-in vector glyph, "auto" plays the bundled animation matching the
- * current condition, and any other value plays that one file.
+ * @brief Clock with today's conditions, and the user's 80x80 GIF when set
  */
 class WeatherClockScreen : public Screen {
    public:
@@ -52,8 +48,7 @@ class WeatherClockScreen : public Screen {
     String _detailCache;
     String _noDataCache;
 
-    // Condition the icon slot currently shows, whichever mode drew it. 0xFF
-    // forces a repaint on the next tick.
+    // Condition the glyph currently shows. 0xFF forces a repaint next tick.
     uint8_t _iconCondition = 0xFF;
     bool _gifStarted = false;
 };
