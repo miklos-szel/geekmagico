@@ -348,7 +348,7 @@ function timePage() {
 
 function picturesPage() {
   return {
-    cfg: { auto_display: true, shuffle: false, interval_s: 5 },
+    cfg: { auto_display: true, shuffle: true, interval_s: 30 },
     status: "",
 
     async init() {
@@ -356,7 +356,7 @@ function picturesPage() {
         const cfg = await getConfig("/api/v1/pictures/config");
         this.cfg.auto_display = !!cfg.auto_display;
         this.cfg.shuffle = !!cfg.shuffle;
-        this.cfg.interval_s = cfg.interval_s || 5;
+        this.cfg.interval_s = cfg.interval_s || 30;
       } catch (e) {
         /* defaults */
       }
@@ -378,13 +378,13 @@ function settingsPage() {
     cfg: {
       theme: 0,
       auto_switch: false,
-      auto_switch_interval_s: 10,
+      auto_switch_interval_s: 30,
       auto_switch_mask: 0,
       brightness: 60,
-      night_mode: false,
+      night_mode: true,
       night_start: "22:00",
       night_end: "07:00",
-      night_brightness: 20,
+      night_brightness: 15,
       rotation: 0,
     },
     themes: [],

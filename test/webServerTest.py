@@ -361,11 +361,11 @@ TIME_DEFAULTS = {
     "date_format": "DD/MM/YYYY", "colon_blink": False, "font": 0,
     "ntp_server": "",
 }
-PICTURE_DEFAULTS = {"auto_display": True, "shuffle": False, "interval_s": 5, "current": ""}
+PICTURE_DEFAULTS = {"auto_display": True, "shuffle": True, "interval_s": 30, "current": ""}
 DISPLAY_DEFAULTS = {
-    "theme": 0, "auto_switch": False, "auto_switch_interval_s": 10,
-    "auto_switch_mask": 0, "brightness": 60, "night_mode": False,
-    "night_start": "22:00", "night_end": "07:00", "night_brightness": 20,
+    "theme": 0, "auto_switch": False, "auto_switch_interval_s": 30,
+    "auto_switch_mask": 0, "brightness": 60, "night_mode": True,
+    "night_start": "22:00", "night_end": "07:00", "night_brightness": 15,
     "rotation": 0,
 }
 WEB_DEFAULTS = {

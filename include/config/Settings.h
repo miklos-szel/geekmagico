@@ -91,8 +91,8 @@ struct TimeSettings {
  */
 struct PictureSettings {
     bool auto_display = true;
-    bool shuffle = false;  // Show the album in a random order
-    uint16_t interval_s = 5;
+    bool shuffle = true;  // Show the album in a random order
+    uint16_t interval_s = 30;
     std::string current;   // Pinned file when auto_display is off
 };
 
@@ -105,13 +105,13 @@ struct PictureSettings {
 struct DisplaySettings {
     uint8_t theme = THEME_WEATHER_CLOCK;
     bool auto_switch = false;
-    uint16_t auto_switch_interval_s = 10;
+    uint16_t auto_switch_interval_s = 30;
     uint8_t auto_switch_mask = 0;  // One bit per ThemeId
     uint8_t brightness = 60;       // 0-100
-    bool night_mode = false;
+    bool night_mode = true;
     uint16_t night_start = 22 * 60;
     uint16_t night_end = 7 * 60;
-    uint8_t night_brightness = 20;  // 0-100
+    uint8_t night_brightness = 15;  // 0-100
 };
 
 /**
