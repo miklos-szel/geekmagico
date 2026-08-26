@@ -65,7 +65,10 @@ struct WeatherSettings {
     std::string wind = "kmh";      // ms | kmh | mph
     std::string temp = "c";        // c | f
     std::string pressure = "hpa";  // hpa | inhg | mmhg
-    std::string gif;               // 80x80 animation shown on the weather screen
+    // Weather screen icon: empty draws the built-in vector glyphs, "auto"
+    // plays the bundled animation matching the condition, anything else is a
+    // filename in /gif played for every condition.
+    std::string gif;
 };
 
 /**
@@ -81,7 +84,7 @@ struct TimeSettings {
     uint16_t minute_color = 0xFD20;
     uint16_t second_color = 0xFFFF;
     bool format12h = false;
-    std::string date_format = "DD/MM/YYYY";
+    std::string date_format = "YYYY-MM-DD";
     bool colon_blink = false;
     uint8_t font = 0;
 };

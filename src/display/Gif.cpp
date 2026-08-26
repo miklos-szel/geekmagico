@@ -215,11 +215,13 @@ auto Gif::gifDraw(GIFDRAW* pDraw) -> void  // NOLINT(readability-function-cognit
     if (pDraw->y == 0 && s_instance != nullptr) {
         if (!s_instance->m_centered) {
             if (s_instance->m_forcedPlacement) {
-                // Explicit placement: anchor the frame's own origin to it.
-                s_instance->m_offsetX =
-                    static_cast<int16_t>(s_instance->m_forcedX - static_cast<int>(pDraw->iX));
-                s_instance->m_offsetY =
-                    static_cast<int16_t>(s_instance->m_forcedY - static_cast<int>(pDraw->iY));
+                // playOne() already resolved m_forcedX/Y to where the GIF's
+                // canvas origin goes, so this is a plain canvas-to-panel
+                // translation. Subtracting the first frame's iX/iY here would
+                // shift every later frame by that frame's offset, which is
+                // invisible only while frame 0 happens to start at (0,0).
+                s_instance->m_offsetX = s_instance->m_forcedX;
+                s_instance->m_offsetY = s_instance->m_forcedY;
             } else {
                 const auto screenW = static_cast<int>(gfx->width());
                 const auto screenH = static_cast<int>(gfx->height());
@@ -275,7 +277,12 @@ auto Gif::gifDraw(GIFDRAW* pDraw) -> void  // NOLINT(readability-function-cognit
         }
     };
 
-    if (yPos < 0 || yPos >= static_cast<int>(gfx->height())) {
+    const auto clipX0 = (s_instance != nullptr) ? static_cast<int>(s_instance->m_clipX0) : 0;
+    const auto clipX1 = (s_instance != nullptr) ? static_cast<int>(s_instance->m_clipX1) : static_cast<int>(gfx->width());
+    const auto clipY0 = (s_instance != nullptr) ? static_cast<int>(s_instance->m_clipY0) : 0;
+    const auto clipY1 = (s_instance != nullptr) ? static_cast<int>(s_instance->m_clipY1) : static_cast<int>(gfx->height());
+
+    if (yPos < clipY0 || yPos >= clipY1) {
         closeFrameIfDone();
         return;
     }
@@ -289,28 +296,32 @@ auto Gif::gifDraw(GIFDRAW* pDraw) -> void  // NOLINT(readability-function-cognit
     int visStart = 0;
     int visEnd = drawW;
 
-    if (xPos < 0) {
-        visStart = -xPos;
+    if (xPos < clipX0) {
+        visStart = clipX0 - xPos;
     }
 
-    if (xPos + visEnd > static_cast<int>(gfx->width())) {
-        visEnd = static_cast<int>(gfx->width() - xPos);
+    if (xPos + visEnd > clipX1) {
+        visEnd = clipX1 - xPos;
     }
 
     if (visEnd <= visStart) {
+        // Same reason as the vertical clip above: a frame clipped entirely
+        // away must still close its SPI transaction and roll the disposal
+        // bookkeeping forward. Box placement made this reachable -- clipping
+        // used to be against the whole 240px panel.
+        closeFrameIfDone();
         return;
     }
 
     const auto curStart = static_cast<int>(xPos + visStart);
     const auto curEnd = static_cast<int>(xPos + visEnd);
 
-    const auto screenW = static_cast<int>(gfx->width());
     bool skipDraw = false;
 
     if (width <= 0) {
         skipDraw = true;
     }
-    if (xPos >= screenW || (xPos + drawW) <= 0) {
+    if (xPos >= clipX1 || (xPos + drawW) <= clipX0) {
         skipDraw = true;
     }
 
@@ -335,7 +346,6 @@ auto Gif::gifDraw(GIFDRAW* pDraw) -> void  // NOLINT(readability-function-cognit
     const bool curValid = (!skipDraw);
 
     if (needClearLine || curValid) {
-        const auto screenW2 = static_cast<int>(gfx->width());
         int uStart = curValid ? curStart : clearStart;
         int uEnd = curValid ? curEnd : clearEnd;
 
@@ -348,11 +358,13 @@ auto Gif::gifDraw(GIFDRAW* pDraw) -> void  // NOLINT(readability-function-cognit
             }
         }
 
-        if (uStart < 0) {
-            uStart = 0;
+        // Clamp to the box, not the panel: the disposal clear is a separate
+        // write path and would otherwise bleed outside a placed animation.
+        if (uStart < clipX0) {
+            uStart = clipX0;
         }
-        if (uEnd > screenW2) {
-            uEnd = screenW2;
+        if (uEnd > clipX1) {
+            uEnd = clipX1;
         }
         const auto uLen = static_cast<int>(uEnd - uStart);
         if (uLen > 0) {
@@ -479,6 +491,16 @@ auto Gif::playOne(const String& path) -> bool {
 
     if (m_gif->open(path.c_str(), gifOpenFile, gifCloseFile, gifReadFile, gifSeekFile, gifDraw) <= 0) {
         return false;
+    }
+
+    if (m_forcedPlacement) {
+        // Centre on the canvas rather than on the first frame: pDraw->iWidth is
+        // a sub-frame width and only happens to match on frame 0.
+        const auto canvasW = static_cast<int16_t>(m_gif->getCanvasWidth());
+        const auto canvasH = static_cast<int16_t>(m_gif->getCanvasHeight());
+
+        m_forcedX = static_cast<int16_t>(m_clipX0 + ((m_boxW - canvasW) / 2));
+        m_forcedY = static_cast<int16_t>(m_clipY0 + ((m_boxH - canvasH) / 2));
     }
 
     m_currentPath = path;
@@ -681,26 +703,46 @@ auto Gif::isPlaying() const -> bool { return m_playing; }
 auto Gif::setLoopEnabled(bool enabled) -> void { m_loopEnabled = enabled; }
 
 /**
- * @brief Place subsequent playback at an explicit top-left corner
+ * @brief Confine subsequent playback to a box on the panel
  *
- * @param xPos Left edge on the panel
- * @param yPos Top edge on the panel
+ * The animation is centred inside the box and clipped to it, so a GIF that is
+ * not exactly the box size neither hugs one corner nor paints over whatever
+ * sits beside it. The centring itself is resolved in playOne(), once the
+ * canvas dimensions are known.
+ *
+ * @param xPos Left edge of the box
+ * @param yPos Top edge of the box
+ * @param width Box width
+ * @param height Box height
  *
  * @return void
  */
-auto Gif::setPlacement(int16_t xPos, int16_t yPos) -> void {
+auto Gif::setPlacement(int16_t xPos, int16_t yPos, int16_t width, int16_t height) -> void {
     m_forcedPlacement = true;
     m_forcedX = xPos;
     m_forcedY = yPos;
+    m_boxW = width;
+    m_boxH = height;
+
+    m_clipX0 = xPos;
+    m_clipY0 = yPos;
+    m_clipX1 = static_cast<int16_t>(xPos + width);
+    m_clipY1 = static_cast<int16_t>(yPos + height);
+
     m_centered = false;
 }
 
 /**
- * @brief Return to centring subsequent playback
+ * @brief Return to centring subsequent playback on the whole panel
  *
  * @return void
  */
 auto Gif::clearPlacement() -> void {
     m_forcedPlacement = false;
     m_centered = false;
+
+    m_clipX0 = 0;
+    m_clipY0 = 0;
+    m_clipX1 = LCD_W;
+    m_clipY1 = LCD_H;
 }

@@ -358,7 +358,7 @@ WEATHER_DEFAULTS = {
 TIME_DEFAULTS = {
     "tz_mode": "auto", "utc_offset_min": 120, "auto_offset_min": 120, "hour_color": "#FFFFFF",
     "minute_color": "#FFA500", "second_color": "#FFFFFF", "format12h": False,
-    "date_format": "DD/MM/YYYY", "colon_blink": False, "font": 0,
+    "date_format": "YYYY-MM-DD", "colon_blink": False, "font": 0,
     "ntp_server": "",
 }
 PICTURE_DEFAULTS = {"auto_display": True, "shuffle": True, "interval_s": 30, "current": ""}
@@ -545,6 +545,19 @@ def _files_key(h: APIHandler) -> str:
     return f"files.{d}"
 
 
+def _seed_gif_files() -> list:
+    """The bundled wx-*.gif set, read from data/gif so the mock cannot drift."""
+    gif_dir = os.path.normpath(os.path.join(BASE_PATH, "..", "gif"))
+    bundled = []
+    if os.path.isdir(gif_dir):
+        for name in sorted(os.listdir(gif_dir)):
+            if name.startswith("wx-") and name.endswith(".gif"):
+                bundled.append(
+                    {"name": name, "size": os.path.getsize(os.path.join(gif_dir, name))}
+                )
+    return bundled + [{"name": "spaceman.gif", "size": 61000}]
+
+
 @router.route("GET", "/api/v1/files")
 def files_list(h: APIHandler):
     if not check_auth(h):
@@ -553,7 +566,7 @@ def files_list(h: APIHandler):
     files = h.state.get(key)
     if files is None:
         files = [{"name": "sample.jpg", "size": 21000}] if key.endswith("image") \
-            else [{"name": "spaceman.gif", "size": 61000}]
+            else _seed_gif_files()
         h.state.set(key, files)
     used = sum(f["size"] for f in files)
     h.json_response({
@@ -586,6 +599,13 @@ def files_delete(h: APIHandler):
     key = _files_key(h)
     files = [f for f in (h.state.get(key) or []) if f["name"] != data.get("name")]
     h.state.set(key, files)
+    if key.endswith("gif"):
+        cfg = dict(state_defaults(h, "weather", WEATHER_DEFAULTS))
+        # Only an exact filename match clears it, so "auto" survives losing an
+        # individual icon -- same rule as FilesApi.cpp.
+        if cfg.get("gif") == data.get("name"):
+            cfg["gif"] = ""
+            h.state.set("weather", cfg)
     h.json_response({"status": "ok", "message": "File removed"})
 
 
@@ -594,7 +614,12 @@ def files_set(h: APIHandler):
     if not check_auth(h):
         return
     data = h.read_json() or {}
-    h.state.set("files.selected", data.get("name", ""))
+    name = data.get("name", "")
+    h.state.set("files.selected", name)
+    if "dir=gif" in (h.path or ""):
+        cfg = dict(state_defaults(h, "weather", WEATHER_DEFAULTS))
+        cfg["gif"] = name
+        h.state.set("weather", cfg)
     h.json_response({"status": "ok", "message": "Selection saved"})
 
 

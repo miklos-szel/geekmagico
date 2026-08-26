@@ -576,7 +576,7 @@ void registerConfigApi(Webserver* webserver) {
     webserver->raw().on("/api/v1/weather/config", HTTP_GET, [webserver]() { weatherConfigGet(webserver); });
 
     // @openapi {post} /weather/config version=v1 group=Weather summary="Set weather settings" requiresAuth=true
-    // requestBody=application/json requestBodySchema=city:string?,api_key:string?,interval_min:integer?
+    // requestBody=application/json requestBodySchema=city:string?,api_key:string?,forecast_key:string?,interval_min:integer?,wind:string?,temp:string?,pressure:string?,gif:string?
     // responses=200:application/json,400:application/json,401:application/json
     webserver->raw().on("/api/v1/weather/config", HTTP_POST, [webserver]() { weatherConfigSet(webserver); });
 

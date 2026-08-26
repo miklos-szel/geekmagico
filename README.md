@@ -23,7 +23,7 @@ A five-tab web interface — **Network, Weather, Time, Pictures, Settings** — 
 
 | | |
 |---|---|
-| **Weather** | Current conditions and a multi-day forecast. Works with no API key at all; set an OpenWeatherMap key for higher refresh rates. |
+| **Weather** | Current conditions and a multi-day forecast, with animated per-condition icons. Works with no API key at all; set an OpenWeatherMap key for higher refresh rates. |
 | **Clock** | Three time styles plus a simple weather clock. Per-digit colours, 12/24h, date format, colon blink, selectable font. The timezone resolves itself, with a manual UTC offset as fallback. |
 | **Photo album** | JPG and GIF slideshow from onboard storage, in order or shuffled, with **folder upload** from the browser. |
 | **Themes** | Seven screens, switchable by hand or on a timer. |
@@ -148,10 +148,28 @@ pio run --target buildfs # littlefs.bin
 ```
 
 Output lands in `.pio/build/esp12e/`. There is also a devcontainer (`build` / `buildfs`
-aliases) and `./scripts/build-with-docker.sh`.
+aliases) and `./scripts/build-with-docker.sh`, which collects both images into `build/`.
 
 `data/config.json` is gitignored. WiFi credentials placed there are migrated into EEPROM on
 first boot and erased from the file.
+
+### Weather icons
+
+The weather screen's icon slot has three modes, set on the Weather page:
+
+| Mode | What it draws |
+|---|---|
+| **Match the weather** | The bundled `data/gif/wx-*.gif` animations, following the current condition. |
+| **Simple icons** | Vector shapes drawn by the firmware. No files, no filesystem cost. |
+| **Your own GIF** | Press Set on any file in the list; that one plays for every condition. |
+
+Any GIF is centred in the 80x80 slot and clipped to it, so an odd size is untidy rather than
+broken — but 80x80 looks best.
+
+The bundled animations are ordinary files. **Deleting them frees the ~120KB they occupy**, and
+the conditions they covered fall back to the simple icons; flashing `littlefs.bin` again
+restores them. They are rendered from [Meteocons](https://github.com/basmilius/meteocons) by
+`./scripts/build-weather-gifs.sh`, which is the only thing that should write to `data/gif/`.
 
 ### Stack
 
@@ -203,4 +221,5 @@ GeekMagicO contributors; upstream notices are preserved in every file per the li
 ## Credits
 
 - [Times-Z](https://github.com/Times-Z/GeekMagic-Open-Firmware) — the open firmware this forks, and all the hardware reverse-engineering
+- [Meteocons](https://github.com/basmilius/meteocons) by Bas Milius (MIT) — the source art for the built-in weather animations, see [licenses/meteocons-LICENSE](licenses/meteocons-LICENSE)
 - [GeekMagicClock](https://github.com/GeekMagicClock/smalltv-ultra) — the original device
