@@ -28,6 +28,7 @@
 
 #include "project_version.h"
 #include "display/DisplayManager.h"
+#include <new>
 #include "config/ConfigManager.h"
 #include "display/Gif.h"
 #include "display/Backlight.h"
@@ -653,7 +654,9 @@ void DisplayManager::drawLoadingBar(float progress, int yPos, int barWidth, int 
  */
 auto DisplayManager::playGifFullScreen(const String& path, uint32_t timeMs) -> bool {
     if (g_gif == nullptr) {
-        g_gif = new Gif();
+        // nothrow for the same reason as Gif::begin(): a plain `new` that
+        // cannot be satisfied panics the device instead of returning nullptr.
+        g_gif = new (std::nothrow) Gif();
         if (g_gif == nullptr) {
             Logger::error("Failed to allocate GIF decoder", "DisplayManager");
             return false;
@@ -711,7 +714,9 @@ auto DisplayManager::playGifFullScreen(const String& path, uint32_t timeMs) -> b
  */
 auto DisplayManager::playGifAt(const String& path, int16_t xPos, int16_t yPos, int16_t width, int16_t height) -> bool {
     if (g_gif == nullptr) {
-        g_gif = new Gif();
+        // nothrow for the same reason as Gif::begin(): a plain `new` that
+        // cannot be satisfied panics the device instead of returning nullptr.
+        g_gif = new (std::nothrow) Gif();
         if (g_gif == nullptr) {
             Logger::error("Failed to allocate GIF decoder", "DisplayManager");
             return false;
