@@ -4,24 +4,44 @@ from SCons.Script import DefaultEnvironment
 
 env = DefaultEnvironment()
 
+# Only this fork's tags may name a build. Upstream tags land in the repo the
+# moment anyone fetches from Times-Z, and plain --tags would happily pick one:
+# that is where a device reporting "v1.4.0-10-gf62a-dev" came from, for a
+# version that exists nowhere in this history.
+TAG_GLOB = "v*-geekmagico"
+
+
+def _git(project_dir, *args):
+    return (
+        subprocess.check_output(
+            ["git", *args], cwd=project_dir, stderr=subprocess.DEVNULL
+        )
+        .decode()
+        .strip()
+    )
+
+
 def get_git_version(project_dir):
     try:
-        out = subprocess.check_output(
-            [
-                "git",
-                "describe",
-                "--tags",
-                "--always",
-                "--dirty=-dev",
-                "--broken=-dev",
-                "--abbrev=2",
-            ],
-            cwd=project_dir,
-            stderr=subprocess.DEVNULL,
+        return _git(
+            project_dir,
+            "describe",
+            "--tags",
+            "--match",
+            TAG_GLOB,
+            "--dirty=-dev",
+            "--broken=-dev",
+            "--abbrev=2",
         )
-        return out.decode().strip()
     except Exception:
-        return "unknown"
+        pass
+
+    # No matching tag (shallow clone, exported tree, tags not fetched): still
+    # report something traceable rather than "unknown".
+    try:
+        return "0.0.0-" + _git(project_dir, "rev-parse", "--short=7", "HEAD")
+    except Exception:
+        return "0.0.0-unknown"
 
 project_dir = env.get("PROJECT_DIR")
 header_dir = os.path.join(project_dir, "include")
