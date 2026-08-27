@@ -25,6 +25,7 @@
 
 #include "screens/DrawUtils.h"
 #include "display/DisplayManager.h"
+#include "display/IconBitmap.h"
 #include "weather/WeatherClient.h"
 
 namespace {
@@ -63,6 +64,36 @@ struct RayOffset {
 constexpr std::array<RayOffset, 8> SUN_RAYS = {{
     {10, 0}, {7, 7}, {0, 10}, {-7, 7}, {-10, 0}, {-7, -7}, {0, -10}, {7, -7},
 }};
+
+// Icon basenames indexed by WeatherCondition, held in flash rather than DRAM:
+// twelve string literals in .rodata would be DRAM on this part, which is the
+// budget that actually binds here.
+//
+// NOLINTBEGIN(modernize-avoid-c-arrays): PROGMEM only applies to C arrays, and
+// strncpy_P/pgm_read_ptr take PGM_P. A std::array here would move the strings
+// back into DRAM, which is the whole reason the table exists.
+const char WX_NAME_UNKNOWN[] PROGMEM = "unknown";
+const char WX_NAME_CLEAR[] PROGMEM = "clear";
+const char WX_NAME_PARTLY[] PROGMEM = "partly";
+const char WX_NAME_CLOUDY[] PROGMEM = "cloudy";
+const char WX_NAME_FOG[] PROGMEM = "fog";
+const char WX_NAME_DRIZZLE[] PROGMEM = "drizzle";
+const char WX_NAME_RAIN[] PROGMEM = "rain";
+const char WX_NAME_SNOW[] PROGMEM = "snow";
+const char WX_NAME_SLEET[] PROGMEM = "sleet";
+const char WX_NAME_THUNDER[] PROGMEM = "thunder";
+const char WX_NAME_CLEAR_NIGHT[] PROGMEM = "clear-n";
+const char WX_NAME_PARTLY_NIGHT[] PROGMEM = "partly-n";
+
+PGM_P const WX_NAMES[] PROGMEM = {
+    WX_NAME_UNKNOWN, WX_NAME_CLEAR, WX_NAME_PARTLY, WX_NAME_CLOUDY, WX_NAME_FOG,
+    WX_NAME_DRIZZLE, WX_NAME_RAIN,  WX_NAME_SNOW,   WX_NAME_SLEET,  WX_NAME_THUNDER,
+};
+// NOLINTEND(modernize-avoid-c-arrays)
+
+constexpr uint8_t WX_NAME_COUNT = 10;
+constexpr size_t WX_NAME_MAX = 12;
+constexpr size_t WX_PATH_MAX = 24;
 
 auto segmentOn(uint8_t digit, uint8_t segment) -> bool {
     if (digit > MAX_DIGIT) {
@@ -388,3 +419,61 @@ void DrawUtils::weatherGlyph(int16_t xPos, int16_t yPos, int16_t size, uint8_t c
     }
 }
 // NOLINTEND(readability-magic-numbers,bugprone-narrowing-conversions)
+
+/**
+ * @brief Whether a condition has night artwork, given a night reading
+ *
+ * Only clear and partly-cloudy differ after dark -- an overcast sky hides the
+ * sun and the moon equally, so the other eight conditions share one image.
+ *
+ * This is the single definition of that rule on purpose. Callers cache the
+ * icon they last drew and must key that cache on the same answer, or a device
+ * would repaint an identical image at every sunrise and sunset.
+ *
+ * @param condition WeatherCondition value
+ * @param night Whether it is night at the observed location
+ *
+ * @return true when the night variant should be used
+ */
+auto DrawUtils::weatherIconIsNight(uint8_t condition, bool night) -> bool {
+    return night && (condition == WX_CLEAR || condition == WX_PARTLY_CLOUDY);
+}
+
+/**
+ * @brief Draw a bundled weather icon from the filesystem
+ *
+ * Returns false when the icon set is not installed, which is the normal state
+ * after a firmware-only update: the caller falls back to weatherGlyph(). That
+ * makes this a soft dependency on littlefs.bin rather than a hard one.
+ *
+ * @param xPos Left edge of the icon slot
+ * @param yPos Top edge of the icon slot
+ * @param size Slot size in pixels, naming the icon set to draw from
+ * @param condition WeatherCondition value
+ * @param night Whether it is night at the observed location
+ *
+ * @return true when an icon was drawn
+ */
+auto DrawUtils::weatherIcon(int16_t xPos, int16_t yPos, int16_t size, uint8_t condition, bool night) -> bool {
+    if (condition >= WX_NAME_COUNT) {
+        return false;
+    }
+
+    std::array<char, WX_NAME_MAX> name{};
+
+    if (DrawUtils::weatherIconIsNight(condition, night)) {
+        strncpy_P(name.data(), (condition == WX_CLEAR) ? WX_NAME_CLEAR_NIGHT : WX_NAME_PARTLY_NIGHT, name.size() - 1);
+    } else {
+        strncpy_P(name.data(), reinterpret_cast<PGM_P>(pgm_read_ptr(&WX_NAMES[condition])), name.size() - 1);
+    }
+
+    // Longest real path is "/wx/80/partly-n.wxi" at 19 characters, so this
+    // only fires if the table and the buffer drift apart.
+    std::array<char, WX_PATH_MAX> path{};
+    const int written = snprintf(path.data(), path.size(), "/wx/%d/%s.wxi", static_cast<int>(size), name.data());
+    if (written <= 0 || static_cast<size_t>(written) >= path.size()) {
+        return false;
+    }
+
+    return IconBitmap::draw(path.data(), xPos, yPos);
+}

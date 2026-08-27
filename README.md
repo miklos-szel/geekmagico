@@ -142,7 +142,7 @@ against a determined attacker with physical access.
 Requires [PlatformIO](https://docs.platformio.org/en/latest/core/installation/methods/installer-script.html).
 
 ```bash
-cp data/config.example data/config.json
+cp data/config.json.example data/config.json
 pio run                  # firmware.bin
 pio run --target buildfs # littlefs.bin
 ```
@@ -150,8 +150,29 @@ pio run --target buildfs # littlefs.bin
 Output lands in `.pio/build/esp12e/`. There is also a devcontainer (`build` / `buildfs`
 aliases) and `./scripts/build-with-docker.sh`, which collects both images into `build/`.
 
-`data/config.json` is gitignored. WiFi credentials placed there are migrated into EEPROM on
-first boot and erased from the file.
+`data/config.json` is gitignored. It is baked into `littlefs.bin` and read as `/config.json`
+on every boot, so anything you put there ships with the image.
+
+### Pre-seeding a build
+
+Beyond WiFi, the example file exposes the two settings that otherwise have to be typed into the
+web UI on every fresh device:
+
+| Key | Meaning |
+|---|---|
+| `city` | Either a city name (`"Budapest"`) or a numeric [OpenWeatherMap city ID](https://openweathermap.org/find) (`"3054643"`). An ID avoids the ambiguity of duplicate city names. |
+| `weather.api_key` | OpenWeatherMap key. Leave it empty to use the keyless provider, which is what makes the device work out of the box. |
+| `weather.forecast_key` | Key for the forecast endpoint, when it differs from the current-conditions one. |
+| `ntp_server` | Only applied during the WiFi migration below; otherwise the configured default is kept. |
+
+Two asymmetries are worth knowing before you bake a key in:
+
+- **WiFi credentials are erased, the weather key is not.** `wifi_ssid` / `wifi_password` are
+  migrated into EEPROM on first boot and stripped from the file. `city` and `weather.api_key`
+  are ordinary settings, so they stay in `/config.json` in plaintext — exactly as the web UI
+  already stores them. If you share a `littlefs.bin` you pre-seeded, your key is inside it.
+- **Re-flashing `littlefs.bin` overwrites `/config.json`.** A baked-in value comes back on every
+  filesystem flash and silently replaces whatever was later set through the web UI.
 
 ### Stack
 

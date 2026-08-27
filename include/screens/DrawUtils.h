@@ -61,6 +61,9 @@ class DrawUtils {
                               uint16_t background);
 
     static void weatherGlyph(int16_t xPos, int16_t yPos, int16_t size, uint8_t condition, uint16_t background);
+
+    static auto weatherIconIsNight(uint8_t condition, bool night) -> bool;
+    static auto weatherIcon(int16_t xPos, int16_t yPos, int16_t size, uint8_t condition, bool night) -> bool;
 };
 
 #endif  // SCREENS_DRAWUTILS_H

@@ -60,9 +60,6 @@ auto resolveDir(Webserver* webserver) -> const char* {
 
     const String requested = webserver->raw().arg("dir");
 
-    if (requested == "gif" || requested == FileStore::GIF_DIR) {
-        return FileStore::GIF_DIR;
-    }
     if (requested == "image" || requested == FileStore::IMAGE_DIR) {
         return FileStore::IMAGE_DIR;
     }
@@ -131,10 +128,6 @@ void filesDelete(Webserver* webserver) {
         configManager.settings.pictures.current.clear();
         configManager.save();
     }
-    if (configManager.settings.weather.gif == name) {
-        configManager.settings.weather.gif.clear();
-        configManager.save();
-    }
 
     ScreenManager::settingsChanged();
 
@@ -166,11 +159,7 @@ void filesSet(Webserver* webserver) {
         return;
     }
 
-    if (strcmp(dir, FileStore::GIF_DIR) == 0) {
-        configManager.settings.weather.gif = name;
-    } else {
-        configManager.settings.pictures.current = name;
-    }
+    configManager.settings.pictures.current = name;
 
     if (!configManager.save()) {
         sendStatus(webserver, HTTP_CODE_INTERNAL_ERROR, "error", "Failed to save config");

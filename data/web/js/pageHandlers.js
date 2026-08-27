@@ -150,7 +150,6 @@ function weatherPage() {
       wind: "ms",
       temp: "c",
       pressure: "hpa",
-      gif: "",
     },
     apiKey: "",
     forecastKey: "",
@@ -172,7 +171,6 @@ function weatherPage() {
           wind: cfg.wind || "ms",
           temp: cfg.temp || "c",
           pressure: cfg.pressure || "hpa",
-          gif: cfg.gif || "",
         };
         this.apiKeySet = !!cfg.api_key_set;
         this.forecastKeySet = !!cfg.forecast_key_set;

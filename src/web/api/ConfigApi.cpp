@@ -93,7 +93,6 @@ void weatherConfigGet(Webserver* webserver) {
     doc["wind"] = cfg.wind.c_str();
     doc["temp"] = cfg.temp.c_str();
     doc["pressure"] = cfg.pressure.c_str();
-    doc["gif"] = cfg.gif.c_str();
 
     // Keys are write-only: report whether one is set, never echo it back.
     doc["api_key_set"] = !cfg.api_key.empty();
@@ -118,7 +117,6 @@ void weatherConfigSet(Webserver* webserver) {
     assignString(doc, "wind", cfg.wind);
     assignString(doc, "temp", cfg.temp);
     assignString(doc, "pressure", cfg.pressure);
-    assignString(doc, "gif", cfg.gif);
     assignString(doc, "api_key", cfg.api_key);
     assignString(doc, "forecast_key", cfg.forecast_key);
 
@@ -159,6 +157,7 @@ void weatherCurrentGet(Webserver* webserver) {
         doc["humidity"] = weather.humidity;
         doc["condition"] = WeatherClient::conditionLabel(weather.condition);
         doc["description"] = weather.description.data();
+        doc["is_night"] = weather.isNight;
         doc["temp_unit"] = WeatherClient::temperatureUnit();
         doc["wind_unit"] = WeatherClient::windUnit();
         doc["pressure_unit"] = WeatherClient::pressureUnit();
@@ -576,7 +575,7 @@ void registerConfigApi(Webserver* webserver) {
     webserver->raw().on("/api/v1/weather/config", HTTP_GET, [webserver]() { weatherConfigGet(webserver); });
 
     // @openapi {post} /weather/config version=v1 group=Weather summary="Set weather settings" requiresAuth=true
-    // requestBody=application/json requestBodySchema=city:string?,api_key:string?,forecast_key:string?,interval_min:integer?,wind:string?,temp:string?,pressure:string?,gif:string?
+    // requestBody=application/json requestBodySchema=city:string?,api_key:string?,forecast_key:string?,interval_min:integer?,wind:string?,temp:string?,pressure:string?
     // responses=200:application/json,400:application/json,401:application/json
     webserver->raw().on("/api/v1/weather/config", HTTP_POST, [webserver]() { weatherConfigSet(webserver); });
 

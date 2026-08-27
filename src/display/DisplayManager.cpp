@@ -699,45 +699,6 @@ auto DisplayManager::playGifFullScreen(const String& path, uint32_t timeMs) -> b
 }
 
 /**
- * @brief Play a GIF looping inside a fixed box, leaving the rest of the panel alone
- *
- * Used for the small animation on the weather screen, which sits alongside
- * text that must not be cleared.
- *
- * @param path Path to the GIF on LittleFS
- * @param xPos Left edge of the box
- * @param yPos Top edge of the box
- * @param width Box width; the animation is centred in it and clipped to it
- * @param height Box height; the animation is centred in it and clipped to it
- *
- * @return true when playback started
- */
-auto DisplayManager::playGifAt(const String& path, int16_t xPos, int16_t yPos, int16_t width, int16_t height) -> bool {
-    if (g_gif == nullptr) {
-        // nothrow for the same reason as Gif::begin(): a plain `new` that
-        // cannot be satisfied panics the device instead of returning nullptr.
-        g_gif = new (std::nothrow) Gif();
-        if (g_gif == nullptr) {
-            Logger::error("Failed to allocate GIF decoder", "DisplayManager");
-            return false;
-        }
-    }
-
-    g_gif->stop();
-
-    if (!g_gif->begin()) {
-        return false;
-    }
-
-    g_lcd.fillRect(xPos, yPos, width, height, LCD_BLACK);
-
-    g_gif->setPlacement(xPos, yPos, width, height);
-    g_gif->setLoopEnabled(true);
-
-    return g_gif->playOne(path);
-}
-
-/**
  * @brief Stop GIF playback without clearing the panel
  *
  * @return true

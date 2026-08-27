@@ -868,8 +868,6 @@ paths:
                   type: "string"
                 pressure:
                   type: "string"
-                gif:
-                  type: "string"
               required: []
         required: true
   /api/v1/weather/current:
