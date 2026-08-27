@@ -61,9 +61,4 @@ void handleNtpConfigSet(Webserver* webserver);
 void handleDisplayRotationGet(Webserver* webserver);
 void handleDisplayRotationSet(Webserver* webserver);
 
-
-void handleLogsGet(Webserver* webserver);
-void handleLogsDownload(Webserver* webserver);
-void handleLogsClear(Webserver* webserver);
-
 #endif  // API_H

@@ -406,7 +406,6 @@ function settingsPage() {
     rotationStatus: "",
     webStatus: "",
     resetStatus: "",
-    logs: [],
 
     async init() {
       await this.load();
@@ -515,13 +514,5 @@ function settingsPage() {
       this.resetStatus = "Rebooting…";
     },
 
-    async fetchLogs() {
-      try {
-        const data = await getConfig("/api/v1/logs");
-        this.logs = data.logs || [];
-      } catch (e) {
-        this.logs = ["Could not read logs: " + e];
-      }
-    },
   };
 }

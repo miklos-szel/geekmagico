@@ -28,7 +28,7 @@ A five-tab web interface — **Network, Weather, Time, Pictures, Settings** — 
 | **Photo album** | JPG and GIF slideshow from onboard storage, in order or shuffled, with **folder upload** from the browser. |
 | **Themes** | Seven screens, switchable by hand or on a timer. |
 | **Display** | Brightness control and a scheduled night mode. |
-| **System** | OTA firmware updates, screen rotation, logs, factory reset, rescue boot mode. |
+| **System** | OTA firmware updates, screen rotation, factory reset, rescue boot mode. |
 
 ## Supported hardware
 
