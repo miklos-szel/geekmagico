@@ -46,7 +46,7 @@ auto FileStore::isValidDir(const char* dir) -> bool {
         return false;
     }
 
-    return strcmp(dir, FileStore::IMAGE_DIR) == 0 || strcmp(dir, FileStore::GIF_DIR) == 0;
+    return strcmp(dir, FileStore::IMAGE_DIR) == 0;
 }
 
 /**

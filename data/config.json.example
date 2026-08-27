@@ -1,0 +1,15 @@
+{
+  "wifi_ssid": "",
+  "wifi_password": "",
+  "ntp_server": "",
+  "lcd_rotation": 0,
+  "city": "",
+  "weather": {
+    "api_key": "",
+    "forecast_key": "",
+    "interval_min": 20,
+    "temp": "c",
+    "wind": "kmh",
+    "pressure": "hpa"
+  }
+}

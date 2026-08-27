@@ -7,7 +7,7 @@ This file should be ran from this local directory
 """
 
 from http.server import HTTPServer, SimpleHTTPRequestHandler
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 import base64
 import json
 import os
@@ -353,7 +353,7 @@ def state_defaults(h: APIHandler, key: str, defaults: dict) -> dict:
 
 WEATHER_DEFAULTS = {
     "city": "vienna", "interval_min": 20, "wind": "kmh", "temp": "c",
-    "pressure": "hpa", "gif": "", "api_key": "", "forecast_key": "",
+    "pressure": "hpa", "api_key": "", "forecast_key": "",
 }
 TIME_DEFAULTS = {
     "tz_mode": "auto", "utc_offset_min": 120, "auto_offset_min": 120, "hour_color": "#FFFFFF",
@@ -407,6 +407,7 @@ def weather_current(h: APIHandler):
         "provider": "openweathermap" if cfg.get("api_key") else "keyless",
         "temp": 19.0, "feels_like": 17.0, "wind": 2.8, "pressure": 1013,
         "humidity": 43, "condition": "Cloudy", "description": "overcast",
+        "is_night": False,
         "temp_unit": "C", "wind_unit": "km/h", "pressure_unit": "hPa",
     })
 
@@ -540,24 +541,50 @@ def system_factory_reset(h: APIHandler):
     h.json_response({"status": "ok", "message": "Settings cleared, rebooting"})
 
 
-def _files_key(h: APIHandler) -> str:
-    d = "gif" if "dir=gif" in (h.path or "") else "image"
-    return f"files.{d}"
+IMAGE_DIR = "/image"
+FILES_KEY = "files.image"
+
+
+def _resolve_dir(h: APIHandler):
+    """Mirror resolveDir() in FilesApi.cpp.
+
+    /image is the only managed directory; the standalone /api/v1/gif routes
+    below keep their own store. An absent ?dir= defaults to /image, anything
+    other than image or /image is rejected. keep_blank_values matches
+    hasArg("dir"), which is true for a present-but-empty argument, and the
+    first occurrence wins the way arg() picks it.
+    """
+    values = parse_qs(urlparse(h.path).query, keep_blank_values=True).get("dir")
+    if not values:
+        return IMAGE_DIR
+    return IMAGE_DIR if values[0] in ("image", IMAGE_DIR) else None
+
+
+def _reject_unknown_dir(h: APIHandler) -> bool:
+    """Answer 400 like the device when ?dir= names an unmanaged directory."""
+    if _resolve_dir(h) is not None:
+        return False
+    h.json_response({"status": "error", "message": "Unknown directory"}, 400)
+    return True
+
+
+def _files(h: APIHandler) -> list:
+    """The /image listing, seeded on first use so every route agrees on it."""
+    files = h.state.get(FILES_KEY)
+    if files is None:
+        files = [{"name": "sample.jpg", "size": 21000}]
+        h.state.set(FILES_KEY, files)
+    return files
 
 
 @router.route("GET", "/api/v1/files")
 def files_list(h: APIHandler):
-    if not check_auth(h):
+    if not check_auth(h) or _reject_unknown_dir(h):
         return
-    key = _files_key(h)
-    files = h.state.get(key)
-    if files is None:
-        files = [{"name": "sample.jpg", "size": 21000}] if key.endswith("image") \
-            else [{"name": "spaceman.gif", "size": 61000}]
-        h.state.set(key, files)
+    files = _files(h)
     used = sum(f["size"] for f in files)
     h.json_response({
-        "dir": "/" + key.split(".")[1], "files": files,
+        "dir": IMAGE_DIR, "files": files,
         "totalBytes": 2000000, "usedBytes": used,
         "freeBytes": 2000000 - used,
     })
@@ -567,46 +594,46 @@ def files_list(h: APIHandler):
 def files_upload(h: APIHandler):
     if not check_auth(h):
         return
-    # Record an entry so the UI's post-upload refresh shows something real.
-    key = _files_key(h)
-    files = list(h.state.get(key) or [])
     length = int(h.headers.get("Content-Length", 0) or 0)
+    if length:
+        h.rfile.read(length)
+    if _reject_unknown_dir(h):
+        return
+    # Record an entry so the UI's post-upload refresh shows something real.
+    files = list(_files(h))
     name = f"upload-{len(files) + 1}.jpg"
-    h.rfile.read(length) if length else None
     files.append({"name": name, "size": max(1, length)})
-    h.state.set(key, files)
+    h.state.set(FILES_KEY, files)
     h.json_response({"status": "ok", "file": name, "freeBytes": 1000000})
 
 
 @router.route("DELETE", "/api/v1/files")
 def files_delete(h: APIHandler):
-    if not check_auth(h):
+    if not check_auth(h) or _reject_unknown_dir(h):
         return
     data = h.read_json() or {}
-    key = _files_key(h)
-    files = [f for f in (h.state.get(key) or []) if f["name"] != data.get("name")]
-    h.state.set(key, files)
-    if key.endswith("gif"):
-        cfg = dict(state_defaults(h, "weather", WEATHER_DEFAULTS))
-        # Only an exact filename match clears it, so "auto" survives losing an
-        # individual icon -- same rule as FilesApi.cpp.
-        if cfg.get("gif") == data.get("name"):
-            cfg["gif"] = ""
-            h.state.set("weather", cfg)
+    name = data.get("name", "")
+    if not name:
+        h.json_response({"status": "error", "message": "name is required"}, 400)
+        return
+    files = _files(h)
+    if not any(f["name"] == name for f in files):
+        h.json_response({"status": "error", "message": "File not found"}, 404)
+        return
+    h.state.set(FILES_KEY, [f for f in files if f["name"] != name])
     h.json_response({"status": "ok", "message": "File removed"})
 
 
 @router.route("POST", "/api/v1/files/set")
 def files_set(h: APIHandler):
-    if not check_auth(h):
+    if not check_auth(h) or _reject_unknown_dir(h):
         return
     data = h.read_json() or {}
     name = data.get("name", "")
+    if not name or not any(f["name"] == name for f in _files(h)):
+        h.json_response({"status": "error", "message": "File not found"}, 404)
+        return
     h.state.set("files.selected", name)
-    if "dir=gif" in (h.path or ""):
-        cfg = dict(state_defaults(h, "weather", WEATHER_DEFAULTS))
-        cfg["gif"] = name
-        h.state.set("weather", cfg)
     h.json_response({"status": "ok", "message": "Selection saved"})
 
 

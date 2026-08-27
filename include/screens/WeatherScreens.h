@@ -29,13 +29,12 @@
 #include "weather/WeatherClient.h"
 
 /**
- * @brief Clock with today's conditions, and the user's 80x80 GIF when set
+ * @brief Clock with today's conditions and a per-condition weather icon
  */
 class WeatherClockScreen : public Screen {
    public:
     void enter() override;
     void tick() override;
-    void leave() override;
 
     auto needsWeather() const -> bool override { return true; }
     auto name() const -> const char* override { return "Weather Clock Today"; }
@@ -48,9 +47,8 @@ class WeatherClockScreen : public Screen {
     String _detailCache;
     String _noDataCache;
 
-    // Condition the glyph currently shows. 0xFF forces a repaint next tick.
+    // Condition the icon currently shows. 0xFF forces a repaint next tick.
     uint8_t _iconCondition = 0xFF;
-    bool _gifStarted = false;
 };
 
 /**

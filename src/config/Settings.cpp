@@ -280,7 +280,6 @@ void settingsFromJson(JsonObjectConst root, Settings& out) {
         readString(weather, "wind", out.weather.wind);
         readString(weather, "temp", out.weather.temp);
         readString(weather, "pressure", out.weather.pressure);
-        readString(weather, "gif", out.weather.gif);
     }
 
     JsonObjectConst timeCfg = childObjectConst(root, "time");
@@ -341,7 +340,6 @@ void settingsToJson(const Settings& settings, JsonObject root) {
     writeMember(weather, "wind", settings.weather.wind.c_str());
     writeMember(weather, "temp", settings.weather.temp.c_str());
     writeMember(weather, "pressure", settings.weather.pressure.c_str());
-    writeMember(weather, "gif", settings.weather.gif.c_str());
 
     JsonObject timeCfg = childObject(root, "time");
     writeMember(timeCfg, "tz_mode", settings.time.tz_mode.c_str());

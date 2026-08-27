@@ -150,7 +150,6 @@ function weatherPage() {
       wind: "ms",
       temp: "c",
       pressure: "hpa",
-      gif: "",
     },
     apiKey: "",
     forecastKey: "",
@@ -172,7 +171,6 @@ function weatherPage() {
           wind: cfg.wind || "ms",
           temp: cfg.temp || "c",
           pressure: cfg.pressure || "hpa",
-          gif: cfg.gif || "",
         };
         this.apiKeySet = !!cfg.api_key_set;
         this.forecastKeySet = !!cfg.forecast_key_set;
@@ -408,7 +406,6 @@ function settingsPage() {
     rotationStatus: "",
     webStatus: "",
     resetStatus: "",
-    logs: [],
 
     async init() {
       await this.load();
@@ -517,13 +514,5 @@ function settingsPage() {
       this.resetStatus = "Rebooting…";
     },
 
-    async fetchLogs() {
-      try {
-        const data = await getConfig("/api/v1/logs");
-        this.logs = data.logs || [];
-      } catch (e) {
-        this.logs = ["Could not read logs: " + e];
-      }
-    },
   };
 }

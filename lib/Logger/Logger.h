@@ -36,15 +36,12 @@ enum LogLevel { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR };
  * A plain integer, not the enum, because the preprocessor cannot see enumerators.
  * 0 = debug, 1 = info, 2 = warn, 3 = error. Set via -DLOG_COMPILE_LEVEL in platformio.ini.
  *
- * Note this is a *floor*, not the runtime filter: LOG_MIN_LEVEL still decides what reaches
- * the retrievable ring buffer.
+ * Log output goes to the serial console only; attach one for the full stream.
  */
 #ifndef LOG_COMPILE_LEVEL
 #define LOG_COMPILE_LEVEL 2
 #endif
 
-static constexpr LogLevel LOG_MIN_LEVEL = LOG_WARN;
-static constexpr size_t LOG_BUFFER_MAX_ENTRIES = 20;
 static constexpr size_t LOG_ENTRY_MAX_LEN = 96;
 
 class Logger {
@@ -87,20 +84,8 @@ class Logger {
 #endif
     }
 
-    static String getLogsAsString();
-    static size_t getLogCount();
-    static const char* getLogEntry(size_t index);
-    static void clearLogs();
-
    private:
-    static void printTime();
     static const char* levelToString(LogLevel level);
-    static void addToBuffer(const char* entry);
-    static void ensureBufferAllocated();
-
-    static char* _logBuffer;
-    static size_t _head;
-    static size_t _count;
 };
 
 #endif  // LOGGER_H

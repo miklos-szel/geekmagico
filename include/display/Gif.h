@@ -43,9 +43,7 @@ class Gif {
     auto isPlaying() const -> bool;
     auto setLoopEnabled(bool enabled) -> void;
 
-    // Confine the animation to a box: centred inside it and clipped to it,
-    // instead of centred on the panel.
-    auto setPlacement(int16_t xPos, int16_t yPos, int16_t width, int16_t height) -> void;
+    // Reset drawing to the whole panel: centred on it and clipped to it.
     auto clearPlacement() -> void;
 
    private:
@@ -70,14 +68,8 @@ class Gif {
     int16_t m_offsetY = 0;
     bool m_centered = false;
 
-    bool m_forcedPlacement = false;
-    int16_t m_forcedX = 0;
-    int16_t m_forcedY = 0;
-    int16_t m_boxW = 0;
-    int16_t m_boxH = 0;
-
-    // Drawing is clipped to this rectangle. It is the whole panel unless a
-    // placement box is set, so full-screen playback is unaffected.
+    // Drawing is clipped to this rectangle, which clearPlacement() resets to
+    // the whole panel.
     int16_t m_clipX0 = 0;
     int16_t m_clipY0 = 0;
     int16_t m_clipX1 = LCD_W;

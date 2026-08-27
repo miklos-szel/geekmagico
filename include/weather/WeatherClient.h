@@ -76,6 +76,12 @@ struct WeatherNow {
     uint8_t humidity = 0;
     WeatherCondition condition = WX_UNKNOWN;
     std::array<char, 24> description{};
+
+    // Night at the observed location, as reported by the provider. Unrelated
+    // to Backlight::isNightActive(), which is the user's configured dimming
+    // window; the two only coincide by accident.
+    bool isNight = false;
+
     bool tzOffsetKnown = false;
     int32_t tzOffsetSeconds = 0;
 };

@@ -50,6 +50,11 @@ constexpr uint16_t MIN_INTERVAL_KEYED_MIN = 1;
 constexpr uint32_t RETRY_DELAY_MS = 60000UL;
 constexpr int32_t TZ_OFFSET_ABSENT = INT32_MIN;
 
+// Bounds of the "it is daytime" band for the clock fallback in
+// nightFromClock(), used only when a provider reports no day/night flag.
+constexpr int DAYLIGHT_START_HOUR = 6;
+constexpr int DAYLIGHT_END_HOUR = 20;
+
 constexpr float MS_TO_KMH = 3.6F;
 constexpr float MS_TO_MPH = 2.236936F;
 constexpr float KMH_TO_MS = 1.0F / 3.6F;
@@ -107,6 +112,63 @@ auto encodeCity(const std::string& city) -> String {
     }
 
     return encoded;
+}
+
+/**
+ * @brief Whether an OpenWeatherMap icon name denotes night
+ *
+ * The names are three characters -- two digits and a 'd' or 'n' suffix, as in
+ * "01d" / "01n". Anything shorter or absent is treated as daytime, which is
+ * the safer default: a sun at night reads as stale data, a moon at noon reads
+ * as a bug.
+ *
+ * @param icon Icon name from weather[0].icon, possibly empty
+ *
+ * @return true when the name ends in 'n'
+ */
+auto iconSuffixIsNight(const char* icon) -> bool {
+    if (icon == nullptr) {
+        return false;
+    }
+
+    const size_t len = strlen(icon);
+
+    return len != 0 && icon[len - 1] == 'n';
+}
+
+/**
+ * @brief Whether a World Weather Online symbol URL denotes night
+ *
+ * wttr.in carries no day flag of its own, but the symbol it links to is named
+ * for the variant -- "wsymbol_0008_clear_sky_night" against
+ * "wsymbol_0001_sunny" -- so the substring is the signal.
+ *
+ * @param url Value of current_condition[0].weatherIconUrl[0].value
+ *
+ * @return true when the URL names a night symbol
+ */
+auto iconUrlIsNight(const char* url) -> bool {
+    return url != nullptr && strstr(url, "night") != nullptr;
+}
+
+/**
+ * @brief Crude day/night guess from the device clock
+ *
+ * Only used when a provider gives no day/night signal at all. Solar noon moves
+ * and the poles ignore this entirely, so it is a fallback and not a
+ * replacement: it is wrong for a few hours a year at temperate latitudes and
+ * wrong for months inside the Arctic circle.
+ *
+ * @return true when the local hour is outside the daylight band, false when
+ *         the clock has not been set yet
+ */
+auto nightFromClock() -> bool {
+    const LocalTime local = TimeService::now();
+    if (!local.valid) {
+        return false;
+    }
+
+    return local.hour < DAYLIGHT_START_HOUR || local.hour >= DAYLIGHT_END_HOUR;
 }
 
 /**
@@ -244,6 +306,7 @@ auto fetchOwmNow(WeatherNow& out) -> bool {
     filter["wind"]["speed"] = true;
     filter["weather"][0]["id"] = true;
     filter["weather"][0]["description"] = true;
+    filter["weather"][0]["icon"] = true;
     filter["timezone"] = true;
 
     JsonDocument doc;
@@ -264,6 +327,11 @@ auto fetchOwmNow(WeatherNow& out) -> bool {
     out.windMs = doc["wind"]["speed"] | 0.0F;
     out.condition = conditionFromOwm(doc["weather"][0]["id"] | 0);
     setDescription(out, doc["weather"][0]["description"] | "");
+
+    // OWM's icon name is the only day/night signal in this payload: "01d" by
+    // day, "01n" by night. Read the suffix rather than indexing blind, so a
+    // shortened or absent value leaves the flag on its daytime default.
+    out.isNight = iconSuffixIsNight(doc["weather"][0]["icon"] | "");
 
     // OpenWeatherMap reports the city's UTC offset, which is what makes the
     // "auto" timezone mode possible.
@@ -301,6 +369,7 @@ auto fetchKeylessNow(WeatherNow& out) -> bool {
     condition["windspeedKmph"] = true;
     condition["weatherCode"] = true;
     condition["weatherDesc"][0]["value"] = true;
+    condition["weatherIconUrl"][0]["value"] = true;
 
     JsonDocument doc;
     if (!fetchFiltered(url, filter, doc)) {
@@ -323,6 +392,12 @@ auto fetchKeylessNow(WeatherNow& out) -> bool {
     String description = reading["weatherDesc"][0]["value"] | "";
     description.trim();
     setDescription(out, description.c_str());
+
+    // The symbol URL is this feed's only day/night signal, and it is not
+    // guaranteed to be present. When it is missing, fall back to the clock
+    // rather than pinning every keyless install to daytime icons.
+    const char* iconUrl = reading["weatherIconUrl"][0]["value"] | "";
+    out.isNight = (iconUrl[0] != '\0') ? iconUrlIsNight(iconUrl) : nightFromClock();
 
     // This feed carries no UTC offset, so "auto" timezone cannot be resolved
     // from it; the configured manual offset stays in effect.

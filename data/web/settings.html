@@ -192,24 +192,7 @@
         </div>
 
         <div class="gm-section">
-          <h2>8. Logs</h2>
-          <div class="gm-upload-actions">
-            <button class="secondary" @click="fetchLogs()">Refresh</button>
-          </div>
-          <p class="gm-hint">
-            Only warnings and errors are kept in memory. Attach a serial
-            console for full output.
-          </p>
-          <div class="gm-progress">
-            <template x-for="(line, i) in logs" :key="i">
-              <div><span x-text="line"></span></div>
-            </template>
-            <div x-show="logs.length === 0"><em>No logs loaded.</em></div>
-          </div>
-        </div>
-
-        <div class="gm-section">
-          <h2>9. Factory Reset &amp; Reboot</h2>
+          <h2>8. Factory Reset &amp; Reboot</h2>
           <p class="gm-hint">
             Settings are cleared; uploaded pictures are not affected.
           </p>
@@ -221,7 +204,7 @@
         </div>
 
         <div class="gm-section">
-          <h2>10. Device</h2>
+          <h2>9. Device</h2>
           <p class="gm-hint">
             Model <span x-text="info.model || '—'"></span> ·
             <span x-text="info.firmware || 'GeekMagicO'"></span>

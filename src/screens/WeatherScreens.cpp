@@ -21,7 +21,6 @@
  */
 
 #include <Arduino.h>
-#include <LittleFS.h>
 
 #include "screens/WeatherScreens.h"
 #include "screens/DrawUtils.h"
@@ -40,7 +39,11 @@ constexpr uint16_t ACCENT = 0xFD20;
 // Panel is a fixed 240x240, so the layouts are written as literal geometry.
 // NOLINTBEGIN(readability-magic-numbers)
 constexpr int16_t PANEL_W = 240;
-constexpr int16_t GIF_BOX = 80;
+constexpr int16_t ICON_BOX = 80;
+
+// Packed into the icon cache alongside the condition. Conditions top out at
+// WX_THUNDER (9), so this never collides with the 0xFF repaint sentinel.
+constexpr uint8_t NIGHT_BIT = 0x80;
 
 // Weather clock geometry. The icon and the temperature share a row and are
 // centred on the same axis (icon 80..160, temperature 100..140, both centred
@@ -57,7 +60,7 @@ constexpr int16_t CONDITION_Y = 172;
 constexpr int16_t DETAIL_Y = 196;
 
 // The fallback message shares the condition row rather than sitting in the
-// icon box, where a user's GIF would be drawn over it.
+// icon box, which the weather icon owns.
 constexpr int16_t NO_DATA_Y = CONDITION_Y;
 constexpr int16_t TEXT_RIGHT = 232;
 // NOLINTEND(readability-magic-numbers)
@@ -88,28 +91,6 @@ void WeatherClockScreen::enter() {
     _detailCache = "";
     _noDataCache = "";
     _iconCondition = 0xFF;
-    _gifStarted = false;
-
-    // The 80x80 animation from the Weather page, when the user picked one.
-    const std::string& gifName = configManager.settings.weather.gif;
-    if (!gifName.empty()) {
-        const String path = String("/gif/") + gifName.c_str();
-        if (LittleFS.exists(path)) {
-            _gifStarted = DisplayManager::playGifAt(path, ICON_X, ICON_Y, GIF_BOX, GIF_BOX);
-        }
-    }
-}
-
-/**
- * @brief Stop any GIF the screen started
- *
- * @return void
- */
-void WeatherClockScreen::leave() {
-    if (_gifStarted) {
-        DisplayManager::stopGifQuiet();
-        _gifStarted = false;
-    }
 }
 
 /**
@@ -135,10 +116,10 @@ void WeatherClockScreen::tick() {
         DrawUtils::cachedText(PANEL_W / 2, CONDITION_Y, "", _conditionCache, 2, MUTED, BG_COLOR, ALIGN_CENTER);
         DrawUtils::cachedText(PANEL_W / 2, DETAIL_Y, "", _detailCache, 2, MUTED, BG_COLOR, ALIGN_CENTER);
 
-        // A user's GIF is decoration, not a claim about the weather, so it
-        // keeps playing; only the glyph has to go.
-        if (!_gifStarted && _iconCondition != 0xFF) {
-            DisplayManager::getGfx()->fillRect(ICON_X, ICON_Y, GIF_BOX, GIF_BOX, BG_COLOR);
+        // The icon claims something about the weather, so it goes when the
+        // reading does.
+        if (_iconCondition != 0xFF) {
+            DisplayManager::getGfx()->fillRect(ICON_X, ICON_Y, ICON_BOX, ICON_BOX, BG_COLOR);
             _iconCondition = 0xFF;
         }
 
@@ -150,10 +131,19 @@ void WeatherClockScreen::tick() {
         DrawUtils::cachedText(PANEL_W / 2, NO_DATA_Y, "", _noDataCache, 2, MUTED, BG_COLOR, ALIGN_CENTER);
     }
 
-    // When no GIF is configured the glyph takes the slot the GIF would occupy.
-    if (!_gifStarted && weather.condition != _iconCondition) {
-        DrawUtils::weatherGlyph(ICON_X, ICON_Y, GIF_BOX, weather.condition, BG_COLOR);
-        _iconCondition = weather.condition;
+    // The cache key carries the night bit, or the icon would never swap after
+    // dark; it is the normalised flag, so conditions with no night artwork do
+    // not repaint an identical image at dusk and dawn.
+    const bool night = DrawUtils::weatherIconIsNight(weather.condition, weather.isNight);
+    const auto iconKey = static_cast<uint8_t>(static_cast<uint8_t>(weather.condition) | (night ? NIGHT_BIT : 0U));
+
+    if (iconKey != _iconCondition) {
+        // weatherGlyph() switches on the raw condition, so it must never see
+        // the packed key -- every case would miss and fall to the unknown ring.
+        if (!DrawUtils::weatherIcon(ICON_X, ICON_Y, ICON_BOX, weather.condition, weather.isNight)) {
+            DrawUtils::weatherGlyph(ICON_X, ICON_Y, ICON_BOX, weather.condition, BG_COLOR);
+        }
+        _iconCondition = iconKey;
     }
 
     DrawUtils::cachedText(TEXT_RIGHT, TEMP_Y, formatTemp(weather.tempC), _tempCache, 5, ACCENT, BG_COLOR, ALIGN_RIGHT);
@@ -216,8 +206,11 @@ void WeatherForecastScreen::tick() {
 
         const auto rowY = static_cast<int16_t>(rowTop + (static_cast<int16_t>(i) * rowH));
 
+        // A forecast covers a whole day, so it always uses the day artwork.
         if (day.condition != _conditionCache[i]) {
-            DrawUtils::weatherGlyph(6, rowY, 56, day.condition, BG_COLOR);
+            if (!DrawUtils::weatherIcon(6, rowY, 56, day.condition, false)) {
+                DrawUtils::weatherGlyph(6, rowY, 56, day.condition, BG_COLOR);
+            }
             _conditionCache[i] = day.condition;
         }
 

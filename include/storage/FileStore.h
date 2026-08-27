@@ -30,13 +30,12 @@
 /**
  * @brief Directory-scoped media storage shared by the album and the API
  *
- * Two directories are managed: /image holds the photo album (JPG and GIF) and
- * /gif holds the small animations used on the weather screen.
+ * One directory is managed: /image holds the photo album, which accepts both
+ * JPG stills and animated GIFs.
  */
 class FileStore {
    public:
     static constexpr const char* IMAGE_DIR = "/image";
-    static constexpr const char* GIF_DIR = "/gif";
     static constexpr uint16_t NOT_FOUND = 0xFFFF;
 
     // LittleFS on the ESP8266 is built with LFS_NAME_MAX = 32 and rejects any
